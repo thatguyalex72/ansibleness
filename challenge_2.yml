@@ -1,0 +1,12 @@
+---
+  - name: "Challenge Two"
+    hosts: localhost
+
+    tasks:
+
+    - name: "Display Multiple File Contents"
+      ansible.builtin.debug: var=item
+      with_file:
+        - "/opt/ansibleness/challenge_1.yml"
+        - "/opt/ansibleness/challenge_2.yml"
+        

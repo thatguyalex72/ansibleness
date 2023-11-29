@@ -1,0 +1,18 @@
+---
+  - name: "Install QEMU Guest Agent"
+    hosts: all
+    become: yes
+
+    tasks:
+
+    - name: "Ensure QEMU is installed"
+      apt:
+        name:
+          - qemu-guest-agent
+        state: present
+
+    - name: "Ensure QEMU is started"
+      service:
+        name: qemu-guest-agent
+        state: started
+        enabled: yes
