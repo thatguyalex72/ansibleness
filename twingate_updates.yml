@@ -1,6 +1,6 @@
 ---
 - name: Update Twingate-connectors
-  hosts: your_target_hosts
+  hosts: twingate
   become: true
 
   tasks:
