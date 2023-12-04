@@ -16,3 +16,8 @@
         name: qemu-guest-agent
         state: started
         enabled: yes
+
+    - name: "Ensure Bashtop is installed"
+      apt:
+        name: btop
+        state: present
