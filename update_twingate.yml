@@ -4,28 +4,19 @@
   become: true
 
   tasks:
-    - name: Update apt cache
+    - name: Update APT Cache
       apt:
         update_cache: yes
 
-    - name: Upgrade Twingate-connectors
+    - name: Upgrade Twingate Connectors
       apt:
         name: twingate-connector
         state: latest
 
-    - name: Gather Package Facts
-      package_facts:
-          manager: auto
-
-
-    - name: Print Package Facts
-      ansible.builtin.debug:
-        var: ansible_facts.packages
-
-    - name: Check whether a package called foobar is installed
-      ansible.builtin.debug:
-       msg: "{{ ansible_facts.packages['twingate-connector'] | length }} versions of twingate-connector are installed!"
-      when: "'twingate-connector' in ansible_facts.packages"
-
-    - name: Twingate-Connector versions
+    - name: Gathering Twingate-Connector Versions
       ansible.builtin.command: twingate-connector -V
+      register: twingate_version
+      
+    - name: Printing Twingate-Connector Version
+      debug: 
+        msg: The current Twingate Connection version is {{ twingate_version.stdout }}

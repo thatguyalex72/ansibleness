@@ -1,15 +1,18 @@
 ---
-- name: Update Twingate-connectors
-  hosts: twingate
+- name: Update Everything on Linux
+  hosts: all
   become: true
 
   tasks:
     - name: Update apt cache
-      apt:
+      ansible.builtin.apt:
         update_cache: yes
 
     - name: Upgrade
-      apt:
+      ansible.builtin.apt:
         upgrade: dist
+     
+    - name: Cleanup
+      ansible.builtin.apt:
         autoclean: yes
         autoremove: yes
