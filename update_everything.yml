@@ -1,0 +1,15 @@
+---
+- name: Update Twingate-connectors
+  hosts: twingate
+  become: true
+
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: Upgrade
+      apt:
+        upgrade: dist
+        autoclean: yes
+        autoremove: yes
