@@ -1,8 +1,0 @@
----
-  - name: "Challenge One"
-    hosts: localhost
-
-    tasks:
-
-    - name: "Ping"
-      ping:
