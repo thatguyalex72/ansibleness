@@ -1,29 +1,12 @@
 [twingate]
-10.8.12.62
-10.8.12.38
-10.5.11.31
-10.5.11.47
-10.8.12.46
-10.8.12.44
+twingate_demolab1 ansible_host=10.8.12.62
+twingate_demolab2 ansible_host=10.8.12.38
+twingate_publab1 ansible_host=10.5.11.31
+twingate_publab2 ansible_host=10.5.11.47
+twingate_scalecomputing1 ansible_host=10.8.12.46
+twingate_scalecomputing2 ansible_host=10.8.12.44
 
 [syslog]
-10.8.12.200
-10.5.11.222
+demo_lab_syslog ansible_host=10.8.12.200
+pub_lab_syslog ansible_host=10.5.11.222
 
-<<<<<<< HEAD
-=======
-[homelab]
-192.168.4.190
-
-[windows_servers]
-10.8.12.5
-10.8.12.29
-10.8.12.64
-10.8.12.66
-10.8.12.90
-10.5.11.35
-10.5.11.28
-10.5.11.29
-10.5.11.154
-10.5.11.72
->>>>>>> refs/remotes/origin/main

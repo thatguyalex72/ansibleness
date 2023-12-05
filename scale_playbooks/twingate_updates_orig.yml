@@ -1,0 +1,21 @@
+---
+- name: Update Twingate-connectors
+  hosts: twingate
+  become: true
+
+  tasks:
+    - name: Update Twingate-connectors
+      ansible.builtin.shell: "twingate update"
+      register: update_output
+
+    - name: Verify Twingate service status
+      ansible.builtin.shell: "twingate status"
+      register: status_output
+
+    - name: Display update output
+      ansible.builtin.debug:
+        var: update_output.stdout_lines
+
+    - name: Display status output
+      ansible.builtin.debug:
+        var: status_output.stdout_lines

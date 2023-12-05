@@ -4,18 +4,28 @@
   become: true
 
   tasks:
-    - name: Update Twingate-connectors
-      ansible.builtin.shell: "twingate update"
-      register: update_output
+    - name: Update apt cache
+      apt:
+        update_cache: yes
 
-    - name: Verify Twingate service status
-      ansible.builtin.shell: "twingate status"
-      register: status_output
+    - name: Upgrade Twingate-connectors
+      apt:
+        name: twingate-connector
+        state: latest
 
-    - name: Display update output
+    - name: Gather Package Facts
+      package_facts:
+          manager: auto
+
+
+    - name: Print Package Facts
       ansible.builtin.debug:
-        var: update_output.stdout_lines
+        var: ansible_facts.packages
 
-    - name: Display status output
+    - name: Check whether a package called foobar is installed
       ansible.builtin.debug:
-        var: status_output.stdout_lines
+       msg: "{{ ansible_facts.packages['twingate-connector'] | length }} versions of twingate-connector are installed!"
+      when: "'twingate-connector' in ansible_facts.packages"
+
+    - name: Twingate-Connector versions
+      ansible.builtin.command: twingate-connector -V
