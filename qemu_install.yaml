@@ -1,6 +1,6 @@
 ---
   - name: "Install QEMU Guest Agent"
-    hosts: all
+    hosts: twingate:syslog
     become: yes
 
     tasks:
