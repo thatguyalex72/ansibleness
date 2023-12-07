@@ -1,4 +1,4 @@
-[all_hosts]
+[main_hosts]
 
 Twingate_Demolab1 ansible_host=10.8.12.62
 Twingate_Demolab2 ansible_host=10.8.12.38
