@@ -3,6 +3,5 @@
   hosts: us-otava
 
   tasks:
-    - name: Update apt cache
-      ansible.builtin.apt:
-        update_cache: yes
+    - name: Delete DC02, DC03, US-FINANCE-clone
+			# Figure out how to integrate with API
