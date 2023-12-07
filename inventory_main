@@ -1,11 +1,20 @@
+[all_hosts]
+
+Twingate_Demolab1 ansible_host=10.8.12.62
+Twingate_Demolab2 ansible_host=10.8.12.38
+Twingate_Publab1 ansible_host=10.5.11.31
+Twingate_Publab2 ansible_host=10.5.11.47
+Twingate_Scalecomputing1 ansible_host=10.8.12.46
+Twingate_Scalecomputing2 ansible_host=10.8.12.44
+
 [twingate]
-twingate_demolab1 ansible_host=10.8.12.62
-twingate_demolab2 ansible_host=10.8.12.38
-twingate_publab1 ansible_host=10.5.11.31
-twingate_publab2 ansible_host=10.5.11.47
-twingate_scalecomputing1 ansible_host=10.8.12.46
-twingate_scalecomputing2 ansible_host=10.8.12.44
+Twingate_Demolab1 ansible_host=10.8.12.62
+Twingate_Demolab2 ansible_host=10.8.12.38
+Twingate_Publab1 ansible_host=10.5.11.31
+Twingate_Publab2 ansible_host=10.5.11.47
+Twingate_Scalecomputing1 ansible_host=10.8.12.46
+Twingate_Scalecomputing2 ansible_host=10.8.12.44
 
 [syslog]
-demo_lab_syslog ansible_host=10.8.12.200
-pub_lab_syslog ansible_host=10.5.11.222
+Demo_lab_Syslog ansible_host=10.8.12.200
+Pub_lab_Syslog ansible_host=10.5.11.222
