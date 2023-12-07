@@ -1,0 +1,19 @@
+[us-otava]
+US-Otava_node1 ansible_host=10.8.12.10
+US-Otava_node2 ansible_host=10.8.12.11
+US_Otava_node3 ansible_host=10.8.12.12
+
+[us-maverick]
+US-Maverick_node1 ansible_host=10.8.12.13
+US-Maverick_node2 ansible_host=10.8.12.14
+US-Maverick_node3 ansible_host=10.8.12.15
+
+[us-goose]
+US-Goose ansible_host=10.8.12.16
+
+[us-3350f]
+US-3350F_node1 ansible_host=10.8.12.17
+US-3350F_node2 ansible_host=10.8.12.18
+US-3350F_node3 ansible_host=10.8.12.19
+
+

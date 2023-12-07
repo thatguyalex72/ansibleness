@@ -1,0 +1,8 @@
+---
+- name: Delete Demo VMs
+  hosts: us-otava
+
+  tasks:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: yes

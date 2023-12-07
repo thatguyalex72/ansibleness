@@ -9,4 +9,3 @@ twingate_scalecomputing2 ansible_host=10.8.12.44
 [syslog]
 demo_lab_syslog ansible_host=10.8.12.200
 pub_lab_syslog ansible_host=10.5.11.222
-
