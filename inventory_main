@@ -6,6 +6,8 @@ Twingate_Publab1 ansible_host=10.5.11.31
 Twingate_Publab2 ansible_host=10.5.11.47
 Twingate_Scalecomputing1 ansible_host=10.8.12.46
 Twingate_Scalecomputing2 ansible_host=10.8.12.44
+Demo_lab_Syslog ansible_host=10.8.12.200
+Pub_lab_Syslog ansible_host=10.5.11.222
 
 [twingate]
 Twingate_Demolab1 ansible_host=10.8.12.62
@@ -18,3 +20,4 @@ Twingate_Scalecomputing2 ansible_host=10.8.12.44
 [syslog]
 Demo_lab_Syslog ansible_host=10.8.12.200
 Pub_lab_Syslog ansible_host=10.5.11.222
+
