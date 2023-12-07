@@ -1,6 +1,6 @@
 ---
-- name: Update Everything on Linux
-  hosts: all
+- name: Update Everything on Linux VMs
+  hosts: twingate:syslog
   become: true
 
   tasks:
