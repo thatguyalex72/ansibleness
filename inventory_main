@@ -21,34 +21,34 @@ Syslog_Demolab ansible_host=10.8.12.200
 Syslog_Publab ansible_host=10.5.11.222
 
 [demo_clusters]
-US-Otava_node1 ansible_host=10.8.12.10
-US-Otava_node2 ansible_host=10.8.12.11
+US_Otava_node1 ansible_host=10.8.12.10
+US_Otava_node2 ansible_host=10.8.12.11
 US_Otava_node3 ansible_host=10.8.12.12
-US-Maverick_node1 ansible_host=10.8.12.13
-US-Maverick_node2 ansible_host=10.8.12.14
-US-Maverick_node3 ansible_host=10.8.12.15
-US-Goose ansible_host=10.8.12.16
-US-3350F_node1 ansible_host=10.8.12.17
-US-3350F_node2 ansible_host=10.8.12.18
-US-3350F_node3 ansible_host=10.8.12.19
+US_Maverick_node1 ansible_host=10.8.12.13
+US_Maverick_node2 ansible_host=10.8.12.14
+US_Maverick_node3 ansible_host=10.8.12.15
+US_Goose ansible_host=10.8.12.16
+US_3350F_node1 ansible_host=10.8.12.17
+US_3350F_node2 ansible_host=10.8.12.18
+US_3350F_node3 ansible_host=10.8.12.19
 
-[us-otava]
-US-Otava_node1 ansible_host=10.8.12.10
-US-Otava_node2 ansible_host=10.8.12.11
+[us_otava]
+US_Otava_node1 ansible_host=10.8.12.10
+US_Otava_node2 ansible_host=10.8.12.11
 US_Otava_node3 ansible_host=10.8.12.12
 
-[us-maverick]
-US-Maverick_node1 ansible_host=10.8.12.13
-US-Maverick_node2 ansible_host=10.8.12.14
-US-Maverick_node3 ansible_host=10.8.12.15
+[us_maverick]
+US_Maverick_node1 ansible_host=10.8.12.13
+US_Maverick_node2 ansible_host=10.8.12.14
+US_Maverick_node3 ansible_host=10.8.12.15
 
-[us-goose]
-US-Goose ansible_host=10.8.12.16
+[us_goose]
+US_Goose ansible_host=10.8.12.16
 
-[us-3350f]
-US-3350F_node1 ansible_host=10.8.12.17
-US-3350F_node2 ansible_host=10.8.12.18
-US-3350F_node3 ansible_host=10.8.12.19
+[us_3350f]
+US_3350F_node1 ansible_host=10.8.12.17
+US_3350F_node2 ansible_host=10.8.12.18
+US_3350F_node3 ansible_host=10.8.12.19
 
 [publab_cluster]
 PUB1_node1 ansible_host=10.5.11.10
