@@ -9,6 +9,6 @@
 #From Ansigle Galaxy
 - name: Delete the VM
   scale_computing.hypercore.vm:
-    vm_name: demo-VM
+    vm_name: DC02, DC03, US-FINANCE-clone
     state: absent
   register: result
