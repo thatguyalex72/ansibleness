@@ -1,4 +1,4 @@
-[main_hosts]
+[main_vms]
 Twingate_Demolab1 ansible_host=10.8.12.62
 Twingate_Demolab2 ansible_host=10.8.12.38
 Twingate_Publab1 ansible_host=10.5.11.31
@@ -36,10 +36,6 @@ US-3350F_node3 ansible_host=10.8.12.19
 US-Otava_node1 ansible_host=10.8.12.10
 US-Otava_node2 ansible_host=10.8.12.11
 US_Otava_node3 ansible_host=10.8.12.12
-
-[us-otava:vars]
-scale_user: admin
-scale_pass: passwrd
 
 [us-maverick]
 US-Maverick_node1 ansible_host=10.8.12.13
