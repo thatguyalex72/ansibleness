@@ -1,14 +1,10 @@
 ---
 - name: Delete Demo VMs
-  hosts: us-otava
+  hosts: us_otava
 
-  tasks:
-    - name: Delete DC02, DC03, US-FINANCE-clone
-			# Figure out how to integrate with API
-
-#From Ansigle Galaxy
-- name: Delete the VM
-  scale_computing.hypercore.vm:
+- tasks: 
+  - name: Delete the VM
+    scale_computing.hypercore.vm:
     vm_name: DC02, DC03, US-FINANCE-clone
     state: absent
-  register: result
+    register: result
