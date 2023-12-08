@@ -5,3 +5,10 @@
   tasks:
     - name: Delete DC02, DC03, US-FINANCE-clone
 			# Figure out how to integrate with API
+
+#From Ansigle Galaxy
+- name: Delete the VM
+  scale_computing.hypercore.vm:
+    vm_name: demo-VM
+    state: absent
+  register: result
