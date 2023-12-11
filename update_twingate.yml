@@ -4,19 +4,28 @@
   become: true
 
   tasks:
-    - name: Update APT Cache
-      apt:
-        update_cache: yes
 
-    - name: Upgrade Twingate Connectors
-      apt:
-        name: twingate-connector
-        state: latest
+  - name: Gathering Current Twingate-Connector Versions
+    ansible.builtin.command: twingate-connector -V
+    register: twingate_version
 
-    - name: Gathering Twingate-Connector Versions
-      ansible.builtin.command: twingate-connector -V
-      register: twingate_version
+  - name: Printing Current Twingate-Connector Version
+    debug: 
+      msg: The current Twingate Connection version is {{ twingate_version.stdout }}
+
+  - name: Update APT Cache
+    apt:
+      update_cache: yes
+
+  - name: Upgrade Twingate Connectors
+    apt:
+      name: twingate-connector
+      state: latest
+
+  - name: Gathering New Twingate-Connector Versions
+    ansible.builtin.command: twingate-connector -V
+    register: twingate_version
       
-    - name: Printing Twingate-Connector Version
-      debug: 
-        msg: The current Twingate Connection version is {{ twingate_version.stdout }}
+  - name: Printing New Twingate-Connector Version
+    debug: 
+      msg: The new Twingate Connection version is {{ twingate_version.stdout }}
