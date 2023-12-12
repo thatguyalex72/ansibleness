@@ -3,8 +3,16 @@
   hosts: us_otava
 
 - tasks: 
-  - name: Delete the VM
+  - name: Delete Demo VM
     scale_computing.hypercore.vm:
-    vm_name: DC02, DC03, US-FINANCE-clone
+      cluster_instance:
+        host: "https://{{ inventory_hostname }}"
+        username: "{{ scale_admin_user }}"
+        password: "{{ scale_admin_pass }}"
+    vm_name: "{{ item }}"
     state: absent
     register: result
+    loop:
+      - DC02
+      - DC03
+      - US-FINANCE-clone

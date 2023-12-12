@@ -37,6 +37,10 @@ US_Otava_node1 ansible_host=10.8.12.10
 US_Otava_node2 ansible_host=10.8.12.11
 US_Otava_node3 ansible_host=10.8.12.12
 
+[us_otava:vars]
+scale_admin_user=ansible
+scale_admin_pass=ansible
+
 [us_maverick]
 US_Maverick_node1 ansible_host=10.8.12.13
 US_Maverick_node2 ansible_host=10.8.12.14
