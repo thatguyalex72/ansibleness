@@ -1,24 +1,54 @@
 ---
-  - name: "Install QEMU Guest Agent"
+  - name: Install QEMU Guest Agent, Bashtop, and ClamAV
     hosts: all, !demo_clusters, !publab_clusters
     become: yes
 
     tasks:
 
-    - name: "Ensure QEMU is installed"
+    - name: Install Qemu Guest Agent
       apt:
         name:
           - qemu-guest-agent
         state: present
 
-    - name: "Ensure QEMU is started"
+    - name: Ensure QEMU is Started
       service:
         name: qemu-guest-agent
         state: started
         enabled: yes
 
-    - name: "Ensure Bashtop is installed"
+    - name: Gather QEMU Status
+      ansible.builtin.systemd:
+        name: qemu-guest-agent.service
+      register: qemu_status
+
+    - name: Print QEMU Status
+      debug:
+        var: qemu_status.status.ActiveState
+
+    - name: Ensure Bashtop is installed
       apt:
         name: btop
         state: present
-      
+
+    - name: Install ClamAV
+      apt:
+        name:
+          - clamav
+          - clamav-daemon
+          - clamav-testfiles
+
+    - name: Ensure ClamAV is Started
+      service:
+        name: clamav-daemon
+        state: started
+        enabled: yes
+
+    - name: Gather ClamAV Status
+      ansible.builtin.systemd:
+        name: "clamav-daemon"
+      register: clamav_status
+
+    - name: Print ClamAV Status
+      debug:
+        var: clamav_status.status.ActiveState
