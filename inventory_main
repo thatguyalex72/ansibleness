@@ -7,6 +7,7 @@ Twingate_Scalecomputing1 ansible_host=10.8.12.46
 Twingate_Scalecomputing2 ansible_host=10.8.12.44
 Syslog_Demolab ansible_host=10.8.12.200
 Syslog_Publab ansible_host=10.5.11.222
+Waz_Pub ansible_host=10.5.11.232
 
 [twingate]
 Twingate_Demolab1 ansible_host=10.8.12.62
@@ -19,6 +20,9 @@ Twingate_Scalecomputing2 ansible_host=10.8.12.44
 [syslog]
 Syslog_Demolab ansible_host=10.8.12.200
 Syslog_Publab ansible_host=10.5.11.222
+
+[waz]
+Waz ansible_host=10.5.11.232
 
 [demo_clusters]
 US_Otava_node1 ansible_host=10.8.12.10
