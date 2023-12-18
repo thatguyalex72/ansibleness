@@ -1,6 +1,6 @@
 ---
 - name: Update Everything on Linux VMs
-  hosts: twingate:syslog
+  hosts: all, !demo_clusters, !publab_clusters
   become: true
 
   tasks:
