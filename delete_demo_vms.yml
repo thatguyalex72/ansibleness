@@ -1,9 +1,14 @@
 ---
 - name: Delete Demo VMs
   hosts: us_otava
+  become: false
+  gather_facts: false
 
 - tasks: 
   - name: Delete Demo VM
+    uri:
+      url: http://10.8.12.10/api_example
+      method: POST
     scale_computing.hypercore.vm:
       cluster_instance:
         host: "https://{{ inventory_hostname }}"
