@@ -1,6 +1,6 @@
 ---
 - name: Update Everything on Linux VMs
-  hosts: all, !demo_clusters, !publab_clusters
+  hosts: all
   become: true
 
   tasks:

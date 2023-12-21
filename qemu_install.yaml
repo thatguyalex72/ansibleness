@@ -1,6 +1,6 @@
 ---
   - name: Install QEMU Guest Agent, Bashtop, and ClamAV
-    hosts: all, !demo_clusters, !publab_clusters
+    hosts: all
     become: yes
 
     tasks:
