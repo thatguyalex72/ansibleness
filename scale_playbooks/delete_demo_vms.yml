@@ -1,0 +1,28 @@
+---
+- name: Delete Demo VMs
+  hosts: us_otava
+  become: false
+  gather_facts: false
+
+- tasks: 
+  - name: Delete Demo VM
+    uri:
+      url: http://10.8.12.10/api_example
+      method: POST
+    scale_computing.hypercore.vm:
+      vm_name: "{{ item }}"
+      state: absent
+    register: results
+    loop:
+      - DC02
+      - DC03
+      - US-FINANCE-clone
+    
+  - debug:
+      var: results.stdout
+    
+# Not sure if needed:
+      cluster_instance:
+        host: "https://{{ inventory_hostname }}"
+        username: "{{ scale_admin_user }}"
+        password: "{{ scale_admin_pass }}"
