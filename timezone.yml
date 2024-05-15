@@ -1,0 +1,9 @@
+---
+- name: Update Timezone to America/Indiana/Indianapolis 
+  hosts: all
+  become: true
+
+  tasks:
+    - name: Update Timezone to America/Indiana/Indianapolis
+      timezone:
+        name: America/Indiana/Indianapolis
