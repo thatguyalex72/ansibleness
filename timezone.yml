@@ -1,6 +1,6 @@
 ---
 - name: Update Timezone to America/Indiana/Indianapolis 
-  hosts: all
+  hosts: linux
   become: true
 
   tasks:

@@ -1,4 +1,4 @@
-[main_vms]
+[linux]
 Twingate_Demolab1 ansible_host=10.8.12.62
 Twingate_Demolab2 ansible_host=10.8.12.38
 Twingate_Publab1 ansible_host=10.5.11.31
@@ -31,3 +31,9 @@ Parallels_RAS ansible_host=10.5.11.29
 Parallels_APP ansible_host=10.5.11.154
 Alex_PC ansible_host=10.5.11.28
 SE_GPU ansible_host=10.5.11.120
+
+[windows_temp]
+2016 ansible_host=10.8.12.
+2019 ansible_host=10.8.12.
+2022 ansible_host=10.8.12.
+W10 ansible_host=10.8.12.
