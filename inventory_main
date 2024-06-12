@@ -20,3 +20,14 @@ Syslog_Publab ansible_host=10.5.11.222
 [waz]
 Waz ansible_host=10.5.11.232
 
+[windows]
+DC01 ansible_host=10.8.12.5
+USP-S-Acronis ansible_host=10.8.12.29
+USP-S-Finance ansible_host=10.8.12.64
+USP-S-Maria ansible_host=10.8.12.90
+IOMETER1 ansible_host=10.8.12.66
+PUB2_DC ansible_host=10.5.11.35
+Parallels_RAS ansible_host=10.5.11.29
+Parallels_APP ansible_host=10.5.11.154
+Alex_PC ansible_host=10.5.11.28
+SE_GPU ansible_host=10.5.11.120
