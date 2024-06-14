@@ -20,6 +20,10 @@ Syslog_Publab ansible_host=10.5.11.222
 [waz]
 Waz ansible_host=10.5.11.232
 
+[leo]
+leo_broker ansible_host=10.5.11.49
+leo_gateway ansible_host=10.5.11.54
+
 [win]
 DC01 ansible_host=10.8.12.5
 PUB2_DC ansible_host=10.5.11.35

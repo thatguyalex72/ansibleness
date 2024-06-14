@@ -1,5 +1,5 @@
 ---
-- name: Update Everything on Linux VMs
+- name: Configure Linux VMs for Rsyslog 
   hosts: linux
   become: true
 
@@ -33,4 +33,3 @@
       reboot:
       when: reboot_required_file.stat.exists == true
       
-
