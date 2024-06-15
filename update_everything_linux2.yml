@@ -1,54 +1,26 @@
 ---
-- name: Update Everything on Linux VMs
-  hosts: linux
+- name: Update Everything on Linux RHEL based VMs
+  hosts: leo
   become: true
 
   tasks:
-    - name: Update apt cache
-      when: ansible_os_family == 'Debian'
-      ansible.builtin.apt:
-        update_cache: yes
-
-    - name: Gather Upgradable Packages
-      when: ansible_os_family == 'Debian'
-      shell: apt list --upgradable
-      register: aptresult
-      
-    - name: Show apt Output
-      debug: msg="{{ aptresult.stdout }}"
-
-    - name: Upgrade apt
-      when: ansible_os_family == 'Debian'
-      ansible.builtin.apt:
-        upgrade: dist
-     
-    - name: Cleanup apt
-      when: ansible_os_family == 'Debian'
-      ansible.builtin.apt:
-        autoclean: yes
-        autoremove: yes
-    
     - name: Update yum cache
-      when: ansible_os_family == 'Almalinux'
       ansible.builtin.dnf:
         update_cache: yes
 
     - name: Gather Upgradable Packages
-      when: ansible_os_family == 'Almalinux'
       shell: dnf check-update
-      register: dnfresult
+      register: result
 
     - name: Show dnf Output
-      debug: msg="{{ dnfresult.stdout }}"
+      debug: msg="{{ result.stdout }}"
 
     - name: Upgrade dnf
-      when: ansible_os_family == 'Almalinux'
       ansible.builtin.dnf:
         name: '*'
         state: latest
 
     - name: Cleanup dnf
-      when: ansible_os_family == 'Almalinux'
       ansible.builtin.dnf:
         autoremote: yes
 
