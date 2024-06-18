@@ -1,5 +1,5 @@
 ---
-- name: Update Everything on Linux VMs
+- name: Update Everything on APT based Linux VMs
   hosts: linux
   become: true
 
@@ -12,7 +12,7 @@
       shell: apt list --upgradable
       register: result
       
-    - name: Show Output
+    - name: Show Upgradable Packages
       debug: msg="{{ result.stdout }}"
 
     - name: Upgrade
