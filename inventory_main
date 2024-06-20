@@ -36,5 +36,3 @@ ansible_user=alex
 ansible_password=scale2018!
 ansible_connection=winrm
 ansible_winrm_server_cert_validation=ignore
-
-[windows_temp]
