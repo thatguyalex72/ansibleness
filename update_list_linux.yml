@@ -1,7 +1,8 @@
 ---
 - name: Update Everything on Linux VMs
   hosts: linux 
-  become: false 
+  become: false
+  gather_facts: false 
 
   tasks:
     - name: Gather Upgradable Packages
