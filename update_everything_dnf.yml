@@ -4,10 +4,6 @@
   become: true
 
   tasks:
-    - name: Update yum cache
-      ansible.builtin.dnf:
-        update_cache: yes
-
     - name: Gather Upgradable Packages
       shell: dnf check-update
       register: result
@@ -16,13 +12,13 @@
       debug: msg="{{ result.stdout }}"
 
     - name: Upgrade dnf
-      ansible.builtin.dnf:
+      dnf:
         name: '*'
         state: latest
 
     - name: Cleanup dnf
-      ansible.builtin.dnf:
-        autoremote: yes
+      dnf:
+        autoremove: yes
 
     - name: Check if Reboot Required
       stat:

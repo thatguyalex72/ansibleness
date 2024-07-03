@@ -1,0 +1,33 @@
+---
+- name: Update Everything on Linux RHEL based VMs
+  hosts: leo
+  become: true
+
+  tasks:
+    - name: "[RHEL] Update packages"
+      ansible.builtin.dnf:
+        update_cache: yes
+        name: "*"
+        state: latest
+        exclude: "{{ gbt_packages_versionlock|d() }}"
+        use_backend: dnf4
+      register: _gbt_packages_update_output
+
+    - name: "[RHEL] [INFO] Print installed/updated packages"
+      when: _gbt_packages_update_output.skipped is not defined
+      ansible.builtin.debug:
+        var: _gbt_packages_update_output.results|d()
+    
+    - name: Cleanup dnf
+      dnf:
+        autoremove: yes
+
+    - name: Check if Reboot Required
+      stat:
+        path: /run/reboot-required
+      register: reboot_required_file
+    
+    - name: Reboot if Required
+      reboot:
+      when: reboot_required_file.stat.exists == true
+      

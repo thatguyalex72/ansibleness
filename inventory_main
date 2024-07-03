@@ -33,6 +33,5 @@ Alex_PC ansible_host=10.5.11.28
 
 [win:vars]
 ansible_user=alex
-ansible_password=
 ansible_connection=winrm
 ansible_winrm_server_cert_validation=ignore
