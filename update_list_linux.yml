@@ -1,5 +1,5 @@
 ---
-- name: Update Everything on Linux VMs
+- name: Check updates on Debian Linux VMs
   hosts: linux 
   become: false
   gather_facts: false 
