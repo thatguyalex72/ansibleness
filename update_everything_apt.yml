@@ -8,13 +8,6 @@
       ansible.builtin.apt:
         update_cache: yes
 
-    - name: Gather Upgradable Packages
-      shell: apt list --upgradable
-      register: result
-      
-    - name: Show Upgradable Packages
-      debug: msg="{{ result.stdout }}"
-
     - name: Upgrade
       ansible.builtin.apt:
         upgrade: dist

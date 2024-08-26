@@ -1,6 +1,8 @@
 [linux]
 Twingate_Demolab1 ansible_host=10.8.12.62
 Twingate_Demolab2 ansible_host=10.8.12.38
+Twingate_Demolab3 ansible_host=10.8.12.91
+Twingate_Demolab4 ansible_host=10.8.12.89
 Twingate_Publab1 ansible_host=10.5.11.31
 Twingate_Publab2 ansible_host=10.5.11.47
 Syslog_Demolab ansible_host=10.8.12.200
@@ -10,6 +12,8 @@ Waz ansible_host=10.5.11.222
 [twingate]
 Twingate_Demolab1 ansible_host=10.8.12.62
 Twingate_Demolab2 ansible_host=10.8.12.38
+Twingate_Demolab3 ansible_host=10.8.12.91
+Twingate_Demolab4 ansible_host=10.8.12.89
 Twingate_Publab1 ansible_host=10.5.11.31
 Twingate_Publab2 ansible_host=10.5.11.47
 
