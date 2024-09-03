@@ -1,18 +1,18 @@
 ---
 - name: Update Everything on Linux VMs
-  hosts: win 
+  hosts: win
 
   tasks:
-    - name: Install all Critical and Security Updates 
+    - name: Install all Critical and Security Updates
       win_updates:
         category_names:
         - CriticalUpdates
         - SecurityUpdates
+        - UpdateRollups
         state: installed
-	log_path: C:\ansible_wu.txt
-      register: update_result
-
-    - name: Reboot VM if required
-      win_reboot:
-      when: update_result.reboot_required
+        reboot: true
       
+
+#    - name: Reboot VM if required
+#      win_reboot:
+#      when: update_result.reboot_required
