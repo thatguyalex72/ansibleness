@@ -1,0 +1,66 @@
+---
+# DESCRIPTION
+# Apply APT updates
+# Author: Shameless stolen from u/zoredache from r/ansible
+
+# check
+# ansible-playbook apply_linux_updates.yml --tags check
+# install without reboot
+# ansible-playbook apply_linux_updates.yml -K --tags install
+
+- name: Apply windows updates
+  hosts: linux
+  gather_facts: yes
+
+  tasks:
+
+  - block:
+    - name: Update APT cache
+      ansible.builtin.apt:
+        update_cache: yes
+      become: yes
+      tags:
+      - install
+
+    - name: Gather Upgradable Packages
+      shell: apt list --upgradable
+      register: update_results
+      tags:
+      - install
+      - check
+
+    - name: Show Update Results
+      debug: msg="{{ update_results.stdout }}"
+      tags:
+      - install
+      - check
+
+    - name: Upgrade Dist
+      ansible.builtin.apt:
+        upgrade: dist  
+      become: yes
+      tags:
+      - install
+
+    - name: Cleanup
+      ansible.builtin.apt:
+        autoclean: yes
+        autoremove: yes
+      become: yes
+      tags:
+      - install
+
+    - name: Check if Reboot Required
+      stat:
+        path: /run/reboot-required
+      register: reboot_required_file
+      tags:
+      - install
+
+    - name: Reboot if Required
+      reboot:
+      when: reboot_required_file.stat.exists == true
+      become: yes
+      tags:
+      - install
+

@@ -1,7 +1,7 @@
 ---
 # DESCRIPTION
 # Apply windows updates
-Author: u/zoredache - Ansible Subreddit
+# Author: u/zoredache - Ansible Subreddit
 
 # check
 # ansible-playbook apply_windows_updates.yml --tags check
@@ -9,6 +9,7 @@ Author: u/zoredache - Ansible Subreddit
 # ansible-playbook apply_windows_updates.yml --tags install
 # install with reboot
 # ansible-playbook apply_windows_updates.yml --tags install,reboot
+
 
 - name: Apply windows updates
   hosts: win
