@@ -1,0 +1,119 @@
+---
+# DESCRIPTION
+# Apply APT updates
+# Author: Shamelessly based on the Windows update playbook from u/zoredache on r/ansible
+
+# check
+# ansible-playbook apply_linux_updates.yml --tags check
+# install without reboot
+# ansible-playbook apply_linux_updates.yml -K --tags install
+
+- name: Apply windows updates
+  hosts: linux:leo
+  gather_facts: yes
+
+  tasks:
+
+  - block:
+    - name: Update APT cache
+      ansible.builtin.apt:
+        update_cache: yes
+      become: yes
+      tags:
+      - install
+      when:
+      - ansible_os_family == "Debian"
+      - ansible_distribution == "Ubuntu"
+
+    - name: Gather APT Upgradable Packages
+      shell: apt list --upgradable
+      register: update_results
+      tags:
+      - install
+      - check
+      when:
+      - ansible_os_family == "Debian"
+      - ansible_distribution == "Ubuntu"
+
+    - name: Show APT Update Results
+      debug: msg="{{ update_results.stdout }}"
+      tags:
+      - install
+      - check
+
+    - name: APT Upgrade Dist
+      ansible.builtin.apt:
+        upgrade: dist  
+      become: yes
+      tags:
+      - install
+      when:
+      - ansible_os_family == "Debian"
+      - ansible_distribution == "Ubuntu"
+
+    - name: APT Cleanup
+      ansible.builtin.apt:
+        autoclean: yes
+        autoremove: yes
+      become: yes
+      tags:
+      - install
+      when:
+      - ansible_os_family == "Debian"
+      - ansible_distribution == "Ubuntu"
+
+    - name: Gather Upgradable Packages on YUM
+      shell: yum list updates
+      register: result
+      when:
+        - ansible_os_family == "RedHat"
+        - ansible_distribution == "CentOS"
+        - ansible_distribution == "AlmaLinux"
+      tags:
+      - install
+      - check
+
+    - name: Show YUM Output
+      debug: msg="{{ result.stdout }}"
+      tags:
+      - install
+      - check
+
+    - name: YUM Upgrade
+#      ansible.builtin.yum:
+#        name: '*'
+#        state: latest
+      shell: yum update && yum upgrade -y
+      when:
+        - ansible_os_family == "RedHat"
+        - ansible_distribution == "CentOS"
+        - ansible_distribution == "AlmaLinux"
+      tags:
+      - install
+
+    - name: YUM Cleanup
+#      ansible.builtin.yum:
+#        autoremove: yes
+      shell: yum clean all
+      when:
+        - ansible_os_family == "RedHat"
+        - ansible_distribution == "CentOS"
+        - ansible_distribution == "AlmaLinux"
+      tags:
+      - install
+
+    - name: Check if Reboot Required
+      stat:
+        path: /run/reboot-required
+      register: reboot_required_file
+      tags:
+      - install
+      - reboot
+
+    - name: Reboot if Required
+      reboot:
+      when: reboot_required_file.stat.exists == true
+      become: yes
+      tags:
+      - install
+      - reboot
