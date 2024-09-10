@@ -8,7 +8,7 @@
 # install without reboot
 # ansible-playbook apply_linux_updates.yml -K --tags install
 
-- name: Apply windows updates
+- name: Apply APT Updates
   hosts: linux
   gather_facts: yes
 
@@ -56,6 +56,7 @@
       register: reboot_required_file
       tags:
       - install
+      - reboot
 
     - name: Reboot if Required
       reboot:
@@ -63,4 +64,5 @@
       become: yes
       tags:
       - install
+      - reboot
 
