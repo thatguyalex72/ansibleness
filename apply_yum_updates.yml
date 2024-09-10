@@ -1,0 +1,33 @@
+---
+- name: Update Everything on Linux RHEL based VMs
+  hosts: leo
+  become: true
+
+  tasks:
+    - name: Gather Upgradable Packages
+      shell: yum list updates
+      register: result
+
+    - name: Show YUM Output
+      debug: msg="{{ result.stdout }}"
+
+    - name: Upgrade
+#      ansible.builtin.yum:
+#        name: '*'
+#        state: latest
+      shell: yum update && yum upgrade -y
+
+    - name: Cleanup 
+#      ansible.builtin.yum:
+#        autoremove: yes
+      shell: yum clean all
+
+    - name: Check if Reboot Required
+      stat:
+        path: /run/reboot-required
+      register: reboot_required_file
+    
+    - name: Reboot if Required
+      reboot:
+      when: reboot_required_file.stat.exists == true
+      

@@ -1,0 +1,31 @@
+---
+- name: Update Everything on Linux RHEL based VMs
+  hosts: leo
+  become: true
+
+  tasks:
+    - name: Gather Upgradable Packages
+      shell: dnf check-update
+      register: result
+
+    - name: Show dnf Output
+      debug: msg="{{ result.stdout }}"
+
+    - name: Upgrade dnf
+      dnf:
+        name: '*'
+        state: latest
+
+    - name: Cleanup dnf
+      dnf:
+        autoremove: yes
+
+    - name: Check if Reboot Required
+      stat:
+        path: /run/reboot-required
+      register: reboot_required_file
+    
+    - name: Reboot if Required
+      reboot:
+      when: reboot_required_file.stat.exists == true
+      
