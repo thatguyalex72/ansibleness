@@ -1,0 +1,15 @@
+---
+# DESCRIPTION
+# Upgrade Ubuntu VMs
+# Author: Kevin C on StackOverFlow
+
+- name: "Upgrade Ubuntu"
+  hosts: linux
+  gather_facts: yes
+  become: yes
+
+  tasks:
+  - name: "Do Release Upgrade"
+    ansible.builtin.shell: 
+      cmd: do-release-upgrade -f DistUpgradeViewNonInteractive
+

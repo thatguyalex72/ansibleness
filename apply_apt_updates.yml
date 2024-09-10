@@ -1,7 +1,7 @@
 ---
 # DESCRIPTION
 # Apply APT updates
-# Author: Shameless stolen from u/zoredache from r/ansible
+# Author: Shamelessly based on the Windows update playbook from u/zoredache on r/ansible
 
 # check
 # ansible-playbook apply_linux_updates.yml --tags check
