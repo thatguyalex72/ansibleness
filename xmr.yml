@@ -1,0 +1,83 @@
+---
+# DESCRIPTION
+# Install and Run XMRig 
+# Author: me
+
+- name: "Install and Run XMRig"
+  hosts: xmr
+  gather_facts: yes
+  become: yes
+
+  tasks:
+
+  - block:
+    - name: Update APT cache
+      ansible.builtin.apt:
+        update_cache: yes
+      become: yes
+      tags:
+      - update
+
+    - name: Gather Upgradable Packages
+      shell: apt list --upgradable
+      register: update_results
+      tags:
+      - update
+      - check
+
+    - name: Show Update Results
+      debug: msg="{{ update_results.stdout }}"
+      tags:
+      - update
+      - check
+
+    - name: Upgrade Dist
+      ansible.builtin.apt:
+        upgrade: dist
+      become: yes
+      tags:
+      - update
+
+    - name: Cleanup
+      ansible.builtin.apt:
+        autoclean: yes
+        autoremove: yes
+      become: yes
+      tags:
+      - update
+
+    - name: Check if Reboot Required
+      stat:
+        path: /run/reboot-required
+      register: reboot_required_file
+      tags:
+      - update
+      - reboot
+
+    - name: Reboot if Required
+      reboot:
+      when: reboot_required_file.stat.exists == true
+      become: yes
+      tags:
+      - update
+      - reboot
+
+#  - name: "Git Clone XMRig"
+#    ansible.builtin.git: 
+#      repo: curl -s -L https://raw.githubusercontent.com/MoneroOcean/xmrig_setup/master/setup_moneroocean_miner.sh
+#      dest: /opt
+#    tags:
+#    - install
+
+#  - name: "Run XMRig"
+#    ansible.builtin.shell:
+#      chdir: /opt/xmrig_setup
+#      cmd: bash -s 4AmqpeKMt5VCin3UnAWtxnfCMN5SVfvLKiYsHNEYhXXfCzcR3hDsigTcHnAJx7Bfa61aNa131AR93Ea5AawuvYajJSV6hup
+#    tags:
+#    - run
+
+    - name: Clone Repo and run
+      ansible.builtin.shell:
+        cmd: curl -s -L https://raw.githubusercontent.com/MoneroOcean/xmrig_setup/master/setup_moneroocean_miner.sh | bash -s 4AmqpeKMt5VCin3UnAWtxnfCMN5SVfvLKiYsHNEYhXXfCzcR3hDsigTcHnAJx7Bfa61aNa131AR93Ea5AawuvYajJSV6hup
+      tags:
+      - run

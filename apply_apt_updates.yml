@@ -9,7 +9,7 @@
 # ansible-playbook apply_linux_updates.yml -K --tags install
 
 - name: Apply APT Updates
-  hosts: linux
+  hosts: apt
   gather_facts: yes
 
   tasks:
