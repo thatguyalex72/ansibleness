@@ -51,7 +51,7 @@
       register: update_results
       tags:
       - never
-      - install
+      - update 
       - check
 
     rescue:
@@ -76,5 +76,5 @@
         var: update_results
       tags:
       - never
-      - install
+      - update
       - check

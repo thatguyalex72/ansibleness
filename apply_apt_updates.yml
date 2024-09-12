@@ -20,19 +20,19 @@
         update_cache: yes
       become: yes
       tags:
-      - install
+      - update 
 
     - name: Gather Upgradable Packages
       shell: apt list --upgradable
       register: update_results
       tags:
-      - install
+      - update
       - check
 
     - name: Show Update Results
       debug: msg="{{ update_results.stdout }}"
       tags:
-      - install
+      - update
       - check
 
     - name: Upgrade Dist
@@ -40,7 +40,7 @@
         upgrade: dist  
       become: yes
       tags:
-      - install
+      - update
 
     - name: Cleanup
       ansible.builtin.apt:
@@ -48,14 +48,14 @@
         autoremove: yes
       become: yes
       tags:
-      - install
+      - update
 
     - name: Check if Reboot Required
       stat:
         path: /run/reboot-required
       register: reboot_required_file
       tags:
-      - install
+      - update
       - reboot
 
     - name: Reboot if Required
@@ -63,6 +63,5 @@
       when: reboot_required_file.stat.exists == true
       become: yes
       tags:
-      - install
       - reboot
 
