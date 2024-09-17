@@ -1,41 +1,46 @@
-[linux]
-Twingate_Demolab1 ansible_host=10.8.12.62
-Twingate_Demolab2 ansible_host=10.8.12.38
-Twingate_Demolab3 ansible_host=10.8.12.91
-Twingate_Demolab4 ansible_host=10.8.12.89
-Twingate_Publab1 ansible_host=10.5.11.31
-Twingate_Publab2 ansible_host=10.5.11.47
-Syslog_Demolab ansible_host=10.8.12.200
-Syslog_Publab ansible_host=10.5.11.222
-Waz ansible_host=10.5.11.222
+[apt]
+twingate_demolab1 ansible_host=10.8.12.62
+twingate_demolab2 ansible_host=10.8.12.38
+twingate_demolab3 ansible_host=10.8.12.91
+twingate_demolab4 ansible_host=10.8.12.89
+twingate_publab1 ansible_host=10.5.11.31
+twingate_publab2 ansible_host=10.5.11.47
+syslog_demolab ansible_host=10.8.12.200
+syslog_publab ansible_host=10.5.11.222
 
 [twingate]
-Twingate_Demolab1 ansible_host=10.8.12.62
-Twingate_Demolab2 ansible_host=10.8.12.38
-Twingate_Demolab3 ansible_host=10.8.12.91
-Twingate_Demolab4 ansible_host=10.8.12.89
-Twingate_Publab1 ansible_host=10.5.11.31
-Twingate_Publab2 ansible_host=10.5.11.47
+twingate_demolab1 ansible_host=10.8.12.62
+twingate_demolab2 ansible_host=10.8.12.38
+twingate_demolab3 ansible_host=10.8.12.91
+twingate_demolab4 ansible_host=10.8.12.89
+twingate_publab1 ansible_host=10.5.11.31
+twingate_publab2 ansible_host=10.5.11.47
 
 [syslog]
-Syslog_Demolab ansible_host=10.8.12.200
-Syslog_Publab ansible_host=10.5.11.222
-
-[waz]
-Waz ansible_host=10.5.11.232
+syslog_demolab ansible_host=10.8.12.200
+syslog_publab ansible_host=10.5.11.222
 
 [leo]
 leo_broker ansible_host=10.5.11.49
 leo_gateway ansible_host=10.5.11.54
 
 [win]
-DC01 ansible_host=10.8.12.5
-PUB2_DC ansible_host=10.5.11.35
-Parallels_RAS ansible_host=10.5.11.29
-Parallels_APP ansible_host=10.5.11.154
-Alex_PC ansible_host=10.5.11.28
+dc01 ansible_host=10.8.12.5
+acronis ansible_host=10.8.12.29
+maria ansible_host=10.8.12.90
+acronis_share ansible_host=10.8.12.25
+pub2_dc ansible_host=10.5.11.35
+alex_pc ansible_host=10.5.11.28
+parallels-ras ansible_host=10.5.11.29
+parallels-apps ansible_host=10.5.11.154
+se_gpu ansible_host=10.5.11.120
 
 [win:vars]
 ansible_user=alex
-ansible_connection=winrm
-ansible_winrm_server_cert_validation=ignore
+ansible_password="scale2018!"
+ansible_connection=ssh
+ansible_shell_type=powershell
+ansible_pipelining=true
+ansible_ssh_retries=3
+ansible_become_method=runas
+
