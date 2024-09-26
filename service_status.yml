@@ -1,0 +1,23 @@
+---
+ - name: Get Service Status
+   hosts: apt 
+   gather_facts: no
+   tasks:
+   - name: Get Service Facts
+     ansible.builtin.service_facts:
+     tags:
+     - twingate
+     - qemu
+
+   - name: Twingate Status 
+     ansible.builtin.debug:
+       var: ansible_facts.services["twingate-connector.service"]
+     when: inventory_hostname in groups["twingate"]
+     tags:
+     - twingate
+
+   - name: Qemu Status
+     ansible.builtin.debug:
+       var: ansible_facts.services["qemu-guest-agent.service"]
+     tags:
+     - qemu
