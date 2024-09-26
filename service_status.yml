@@ -8,6 +8,7 @@
      tags:
      - twingate
      - qemu
+     - syslog
 
    - name: Twingate Status 
      ansible.builtin.debug:
@@ -21,3 +22,10 @@
        var: ansible_facts.services["qemu-guest-agent.service"]
      tags:
      - qemu
+
+   - name: Syslog Status
+     ansible.builtin.debug:
+       var: ansible_facts.services["rsyslog.service"]
+     when: inventory_hostname in groups["syslog"]
+     tags:
+     - syslog
