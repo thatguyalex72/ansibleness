@@ -9,6 +9,9 @@
      - twingate
      - qemu
      - syslog
+     - clam
+     - clamd
+     - freshclam
 
    - name: Twingate Status 
      ansible.builtin.debug:
