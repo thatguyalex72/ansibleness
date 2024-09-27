@@ -29,3 +29,17 @@
      when: inventory_hostname in groups["syslog"]
      tags:
      - syslog
+
+   - name: ClamD Status
+     ansible.builtin.debug:
+       var: ansible_facts.services["clamav-daemon.service"]
+     tags:
+     - clamd
+     - clamd
+
+   - name: Freshclam Status
+     ansible.builtin.debug:
+       var: ansible_facts.services["clamav-freshclam.service"]
+     tags:
+     - freshclam
+     - clam
