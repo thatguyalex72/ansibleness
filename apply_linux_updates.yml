@@ -8,8 +8,8 @@
 # install without reboot
 # ansible-playbook apply_linux_updates.yml -K --tags install
 
-- name: Apply windows updates
-  hosts: linux:leo
+- name: Apply All Linux Updates
+  hosts: apt:leo
   gather_facts: yes
 
   tasks:
@@ -18,11 +18,9 @@
     - name: Update APT cache
       ansible.builtin.apt:
         update_cache: yes
-      become: yes
       tags:
       - install
       when:
-      - ansible_os_family == "Debian"
       - ansible_distribution == "Ubuntu"
 
     - name: Gather APT Upgradable Packages
@@ -32,7 +30,6 @@
       - install
       - check
       when:
-      - ansible_os_family == "Debian"
       - ansible_distribution == "Ubuntu"
 
     - name: Show APT Update Results
@@ -40,6 +37,8 @@
       tags:
       - install
       - check
+      when:
+      - ansible_distribution == "Ubuntu"
 
     - name: APT Upgrade Dist
       ansible.builtin.apt:
@@ -48,7 +47,6 @@
       tags:
       - install
       when:
-      - ansible_os_family == "Debian"
       - ansible_distribution == "Ubuntu"
 
     - name: APT Cleanup
@@ -59,14 +57,12 @@
       tags:
       - install
       when:
-      - ansible_os_family == "Debian"
       - ansible_distribution == "Ubuntu"
 
     - name: Gather Upgradable Packages on YUM
       shell: yum list updates
       register: result
       when:
-        - ansible_os_family == "RedHat"
         - ansible_distribution == "CentOS"
         - ansible_distribution == "AlmaLinux"
       tags:
@@ -78,25 +74,26 @@
       tags:
       - install
       - check
+      when:
+        - ansible_distribution == "CentOS"
+        - ansible_distribution == "AlmaLinux"
 
     - name: YUM Upgrade
-#      ansible.builtin.yum:
-#        name: '*'
-#        state: latest
+      ansible.builtin.yum:
+        name: '*'
+        state: latest
       shell: yum update && yum upgrade -y
       when:
-        - ansible_os_family == "RedHat"
         - ansible_distribution == "CentOS"
         - ansible_distribution == "AlmaLinux"
       tags:
       - install
 
     - name: YUM Cleanup
-#      ansible.builtin.yum:
-#        autoremove: yes
+      ansible.builtin.yum:
+        autoremove: yes
       shell: yum clean all
       when:
-        - ansible_os_family == "RedHat"
         - ansible_distribution == "CentOS"
         - ansible_distribution == "AlmaLinux"
       tags:

@@ -18,16 +18,16 @@
       - update
 
     - name: Upgrade
-#      ansible.builtin.yum:
-#        name: '*'
-#        state: latest
+      ansible.builtin.yum:
+        name: '*'
+        state: latest
       shell: sudo yum update -y
       tags:
       - update
 
     - name: Cleanup 
-#      ansible.builtin.yum:
-#        autoremove: yes
+      ansible.builtin.yum:
+        autoremove: yes
       shell: sudo yum clean all
       tags:
       - update
