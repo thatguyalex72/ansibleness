@@ -35,7 +35,7 @@
        var: ansible_facts.services["clamav-daemon.service"]
      tags:
      - clamd
-     - clamd
+     - clam
 
    - name: Freshclam Status
      ansible.builtin.debug:
