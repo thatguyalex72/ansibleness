@@ -1,11 +1,10 @@
 ---
 - name: Update Everything on Linux RHEL based VMs
   hosts: leo
-  become: true
 
   tasks:
     - name: Gather Upgradable Packages
-      shell: sudo yum list updates -y
+      shell: yum list updates 
       register: result
       tags:
       - check
@@ -18,17 +17,19 @@
       - update
 
     - name: Upgrade
+      become: yes
       ansible.builtin.yum:
         name: '*'
         state: latest
-      shell: sudo yum update -y
+#      shell: sudo yum update -y
       tags:
       - update
 
-    - name: Cleanup 
+    - name: Cleanup
+      become: yes 
       ansible.builtin.yum:
         autoremove: yes
-      shell: sudo yum clean all
+#      shell: sudo yum clean all
       tags:
       - update
 
@@ -41,8 +42,9 @@
       - update
     
     - name: Reboot if Required
+      become: yes
       reboot:
       when: reboot_required_file.stat.exists == true
       tags:
-      - check
+      - reboot
       - update

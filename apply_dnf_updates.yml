@@ -1,7 +1,7 @@
 ---
 - name: Update Everything on Linux RHEL based VMs
   hosts: leo
-  become: true
+  become: yes 
 
   tasks:
     - name: Gather Upgradable Packages
