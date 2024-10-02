@@ -1,0 +1,41 @@
+---
+ - name: Get Service State
+   hosts: win 
+   gather_facts: no
+   tasks:
+   - name: Get Service Facts
+     ansible.windows.win_service_info:
+
+#   - name: Parallels State 
+#     ansible.builtin.debug:
+#       var: ansible_facts.services["twingate-connector.service"].state
+#     tags:
+#     - parallels 
+
+   - name: Gather Qemu State
+     ansible.windows.win_service_info:
+       name: QEMU.GA
+     register: qemu
+     tags:
+     - qemu
+     
+   - name: Print Qemu State
+     debug:
+       var: qemu
+     tags:
+     - qemu
+
+   - name: Gather Parallels State
+     ansible.windows.win_service_info:
+       name: RAS*
+     register: ras
+     tags:
+     - ras
+     - parallels
+
+   - name: Print Parallels State
+     debug:
+       var: ras.services[0].state
+     tags:
+     - ras
+     - parallels
