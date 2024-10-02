@@ -1,5 +1,5 @@
 ---
- - name: Get Service Status
+ - name: Get Service State
    hosts: apt 
    gather_facts: no
    tasks:
@@ -13,36 +13,36 @@
      - clamd
      - freshclam
 
-   - name: Twingate Status 
+   - name: Twingate State 
      ansible.builtin.debug:
-       var: ansible_facts.services["twingate-connector.service"]
+       var: ansible_facts.services["twingate-connector.service"].state
      when: inventory_hostname in groups["twingate"]
      tags:
      - twingate
 
-   - name: Qemu Status
+   - name: Qemu State
      ansible.builtin.debug:
-       var: ansible_facts.services["qemu-guest-agent.service"]
+       var: ansible_facts.services["qemu-guest-agent.service"].state
      tags:
      - qemu
 
-   - name: Syslog Status
+   - name: Syslog State
      ansible.builtin.debug:
-       var: ansible_facts.services["rsyslog.service"]
+       var: ansible_facts.services["rsyslog.service"].state
      when: inventory_hostname in groups["syslog"]
      tags:
      - syslog
 
-   - name: ClamD Status
+   - name: ClamD State
      ansible.builtin.debug:
-       var: ansible_facts.services["clamav-daemon.service"]
+       var: ansible_facts.services["clamav-daemon.service"].state
      tags:
      - clamd
      - clam
 
-   - name: Freshclam Status
+   - name: Freshclam State
      ansible.builtin.debug:
-       var: ansible_facts.services["clamav-freshclam.service"]
+       var: ansible_facts.services["clamav-freshclam.service"].state
      tags:
      - freshclam
      - clam

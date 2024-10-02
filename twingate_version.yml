@@ -1,0 +1,17 @@
+---
+# DESCRIPTION
+# Twingate Version 
+
+- name: Twingate Version 
+  hosts: twingate
+  gather_facts: yes
+
+  tasks:
+
+  - block:
+    - name: Gather Twingate Version 
+      shell: twingate-connector -V
+      register: update_results
+
+    - name: Show Update Results
+      debug: msg="{{ update_results.stdout }}"

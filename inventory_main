@@ -35,7 +35,6 @@ syslog_publab ansible_host=10.5.11.222
 [leo]
 leo_broker ansible_host=10.5.11.49
 leo_gateway ansible_host=10.5.11.54
-alma_test ansible_host=10.8.12.58
 
 [win]
 dc01 ansible_host=10.8.12.5
