@@ -17,7 +17,14 @@
 
     - name: Print Missing Windows Updates
       debug:
-        var: missing_updates 
+        var: missing_updates.filtered_updates 
+      tags:
+      - check
+      - update
+
+    - name: Reboot Required for updates?
+      debug:
+        var: missing_updates.reboot_required
       tags:
       - check
       - update
