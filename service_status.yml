@@ -1,6 +1,6 @@
 ---
  - name: Get Service State
-   hosts: apt 
+   hosts: linux 
    gather_facts: no
    tasks:
    - name: Get Service Facts
@@ -36,6 +36,7 @@
    - name: ClamD State
      ansible.builtin.debug:
        var: ansible_facts.services["clamav-daemon.service"].state
+     when: inventory_hostname in groups["apt"]
      tags:
      - clamd
      - clam
@@ -43,6 +44,7 @@
    - name: Freshclam State
      ansible.builtin.debug:
        var: ansible_facts.services["clamav-freshclam.service"].state
+     when: inventory_hostname in groups["apt"]
      tags:
      - freshclam
      - clam
