@@ -36,10 +36,3 @@
         var: update_results
       tags:
       - update
-
-    - name: Reboot Windows VMs If Needed
-      win_reboot:
-      when: update_result.reboot_required
-      tags:
-      - update
-      - reboot
