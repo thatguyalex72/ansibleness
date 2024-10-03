@@ -12,6 +12,7 @@
      - clam
      - clamd
      - freshclam
+     - leo
 
    - name: Twingate State 
      ansible.builtin.debug:
@@ -48,3 +49,10 @@
      tags:
      - freshclam
      - clam
+
+   - name: Leostream Broker State
+     ansible.builtin.debug:
+       var: ansible_facts.services["leostream-broker.service"].state
+     when: inventory_hostname in groups["leo"]
+     tags:
+     - leo
