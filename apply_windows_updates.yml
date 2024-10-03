@@ -1,6 +1,7 @@
 ---
   - name: Apply Windows Updates
     hosts: win
+    gather_facts: false
     become: true
     become_method: runas
     become_user: SYSTEM
@@ -14,32 +15,89 @@
       tags:
       - check
       - update
+      - security
+      - critical
+      - rollup
 
-    - name: Print Missing Windows Updates
+    - name: Missing Windows Updates
       debug:
         var: missing_updates.filtered_updates 
       tags:
       - check
       - update
+      - security
+      - critical
+      - rollup
 
-    - name: Reboot Required for updates?
+    - name: Reboot Required?
       debug:
         var: missing_updates.reboot_required
       tags:
       - check
       - update
+      - security
+      - critical
+      - rollup
 
-    - name: Install All Windows Updates
+    - name: Update All Categories
       win_updates:
         category_names: '*'
         reboot: true
-        reboot_timeout: 3600
+        reboot_timeout: 300
       register: update_results
       tags:
       - update
 
-    - name: Windows Update Results 
+    - name: Windows Update Results
       debug:
         var: update_results
       tags:
       - update
+
+    - name: Security Updates
+      win_updates:
+        category_names:
+        - SecurityUpdates
+        reboot: true
+        reboot_timeout: 300
+      register: security_updates
+      tags:
+      - security
+
+    - name: Security Update Results
+      debug:
+        var: security_updates
+      tags:
+      - security
+
+    - name: Critical Updates
+      win_updates:
+        category_names:
+        - CriticalUpdates
+        reboot: true
+        reboot_timeout: 300
+      register: critical_updates
+      tags:
+      - critical
+
+    - name: Critical Update Results
+      debug:
+        var: critical_updates
+      tags:
+      - critical
+
+    - name: Rollups Updates
+      win_updates:
+        category_names:
+        - UpdateRollups
+        reboot: true
+        reboot_timeout: 300
+      register: rollup_updates
+      tags:
+      - rollup
+
+    - name: Rollup Update Results
+      debug:
+        var: rollup_updates
+      tags:
+      - rollup
