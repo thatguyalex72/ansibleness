@@ -21,6 +21,19 @@
      tags:
      - twingate
 
+   - name: Gather Twingate Version
+     shell: twingate-connector -V
+     register: update_results
+     when: inventory_hostname in groups["twingate"]
+     tags:
+     - twingate
+
+   - name: Show Update Results
+     debug: msg="{{ update_results.stdout }}"
+     when: inventory_hostname in groups["twingate"]
+     tags:
+     - twingate
+
    - name: Qemu State
      ansible.builtin.debug:
        var: ansible_facts.services["qemu-guest-agent.service"].state
