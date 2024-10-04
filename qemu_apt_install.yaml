@@ -10,26 +10,38 @@
         name:
           - qemu-guest-agent
         state: present
+      tags:
+      - install
+      - qemu
 
     - name: Ensure QEMU is Started
       service:
         name: qemu-guest-agent
         state: started
         enabled: yes
+      tags:
+      - services
+      - qemu
 
     - name: Gather QEMU Status
       ansible.builtin.systemd:
         name: qemu-guest-agent.service
       register: qemu_status
+      tags:
+      - services
+      - qemu
 
     - name: Print QEMU Status
       debug:
         var: qemu_status.status.ActiveState
+      tags:
+      - services
+      - qemu
 
-    - name: Ensure Bashtop is installed
-      apt:
-        name: btop
-        state: present
+#    - name: Ensure Bashtop is installed
+#      apt:
+#        name: btop
+#        state: present
 
     - name: Install ClamAV
       apt:
@@ -37,18 +49,30 @@
           - clamav
           - clamav-daemon
           - clamav-testfiles
+      tags:
+      - install
+      - clam
 
     - name: Ensure ClamAV is Started
       service:
         name: clamav-daemon
         state: started
         enabled: yes
+      tags:
+      - services
+      - clam
 
     - name: Gather ClamAV Status
       ansible.builtin.systemd:
         name: "clamav-daemon"
       register: clamav_status
+      tags:
+      - services
+      - clam
 
     - name: Print ClamAV Status
       debug:
         var: clamav_status.status.ActiveState
+      tags:
+      - services
+      - clam
