@@ -1,9 +1,24 @@
 ---
 - name: Update Timezone to America/Indiana/Indianapolis 
   hosts: linux
-  become: true
+  become: false 
 
   tasks:
     - name: Update Timezone to America/Indiana/Indianapolis
       timezone:
         name: America/Indiana/Indianapolis
+      become: true
+      tags:
+      - apply
+
+    - name: Current Time
+      ansible.builtin.debug:
+        var: ansible_date_time.iso8601
+      tags:
+      - check
+
+    - name: Current Set Timezone
+      ansible.builtin.debug:
+        var: ansible_date_time.tz
+      tags:
+      - check

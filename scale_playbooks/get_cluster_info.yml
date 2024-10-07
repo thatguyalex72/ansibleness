@@ -8,8 +8,8 @@
     tasks:
     - name: Get Cluster Info
       scale_computing.hypercore.api:
-        endpoint/rest/v1/Cluster/e75ff703-d1ad-41e1-8dd3-676bbbfd2bac
-        action: get
+        endpoint:/rest/v1/Cluster/e75ff703-d1ad-41e1-8dd3-676bbbfd2bac
+        action: GET 
       register: info
 
     - name: Display Info
