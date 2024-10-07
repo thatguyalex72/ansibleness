@@ -58,13 +58,6 @@
       - update
       - reboot
 
-    - name: Reboot Required?
-      debug:
-        var: reboot_required_file
-      tags:
-      - update
-      - check
-
     - name: Reboot if Required
       reboot:
       when: reboot_required_file.stat.exists == true

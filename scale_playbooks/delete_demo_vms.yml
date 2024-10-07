@@ -5,6 +5,14 @@
   gather_facts: false
 
 - tasks: 
+  - name: Get UUIDs
+    uri:    
+      url: https://10.8.12.10/rest/v1/VirDomain
+      method: GET
+    scale_computing.hypercore.vm:
+      vm_name
+
+
   - name: Delete Demo VM
     uri:
       url: http://10.8.12.10/api_example
@@ -18,11 +26,12 @@
       - DC03
       - US-FINANCE-clone
     
-  - debug:
+  - name: Delete Results
+    debug:
       var: results.stdout
     
 # Not sure if needed:
-      cluster_instance:
-        host: "https://{{ inventory_hostname }}"
-        username: "{{ scale_admin_user }}"
-        password: "{{ scale_admin_pass }}"
+#      cluster_instance:
+#        host: "https://{{ inventory_hostname }}"
+#        username: "{{ scale_admin_user }}"
+#        password: "{{ scale_admin_pass }}"
