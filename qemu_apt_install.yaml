@@ -14,29 +14,29 @@
       - install
       - qemu
 
-    - name: Ensure QEMU is Started
-      service:
-        name: qemu-guest-agent
-        state: started
-        enabled: yes
-      tags:
-      - services
-      - qemu
+#    - name: Ensure QEMU is Started
+#      service:
+#        name: qemu-guest-agent
+#        state: started
+#        enabled: yes
+#      tags:
+#      - services
+#      - qemu
 
-    - name: Gather QEMU Status
-      ansible.builtin.systemd:
-        name: qemu-guest-agent.service
-      register: qemu_status
-      tags:
-      - services
-      - qemu
+#   - name: Gather QEMU Status
+#      ansible.builtin.systemd:
+#        name: qemu-guest-agent.service
+#      register: qemu_status
+#      tags:
+#      - services
+#      - qemu
 
-    - name: Print QEMU Status
-      debug:
-        var: qemu_status.status.ActiveState
-      tags:
-      - services
-      - qemu
+#    - name: Print QEMU Status
+#      debug:
+#        var: qemu_status.status.ActiveState
+#      tags:
+#      - services
+#      - qemu
 
 #    - name: Ensure Bashtop is installed
 #      apt:
