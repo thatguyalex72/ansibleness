@@ -1,0 +1,18 @@
+---
+# DESCRIPTION
+# Check Uptime 
+# Author: Alex
+
+- name: Check Uptime 
+  hosts: linux
+  gather_facts: yes
+
+  tasks:
+
+  - block:
+    - name: Gather Uptime
+      shell: uptime 
+      register: uptime
+
+    - name: Show Uptime Results
+      debug: msg="{{ uptime.stdout }}"
