@@ -14,14 +14,14 @@
       - install
       - qemu
 
-#    - name: Ensure QEMU is Started
-#      service:
-#        name: qemu-guest-agent
-#        state: started
-#        enabled: yes
-#      tags:
-#      - services
-#      - qemu
+    - name: Ensure QEMU is Started
+      service:
+        name: qemu-guest-agent
+        state: started
+        enabled: yes
+      tags:
+      - services
+      - qemu
 
 #   - name: Gather QEMU Status
 #      ansible.builtin.systemd:
