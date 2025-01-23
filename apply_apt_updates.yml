@@ -22,12 +22,34 @@
       tags:
       - update 
 
+    - name: MOTD Package Update
+      shell: bash /etc/update-motd.d/90-updates-available | grep applied
+      register: motd_results
+      tags:
+      - update
+      - check
+      - quick 
+
+    - name: Show MOTD
+      debug: msg="{{ motd_results.stdout }}"
+      tags:
+      - update
+      - check
+      - quick 
+
     - name: Gather Upgradable Packages
-      shell: apt list --upgradable
+      shell: apt list --upgradable 
       register: update_results
       tags:
       - update
       - check
+
+#    - name: Gather Phased Update
+#      shell: apt list 2>/dev/null --upgradable | cut -f1 -d"/" | grep -v Listing | xargs -L1 apt policy 2>/dev/null | grep phased
+#      register: phased_results
+#      tags:
+#      - update
+#      - check
 
     - name: Show Update Results
       debug: msg="{{ update_results.stdout }}"
@@ -65,3 +87,8 @@
       tags:
       - reboot
 
+# Needs more refinement
+#    - name: Gather Upgradable Packages
+#      shell: apt list 2>/dev/null --upgradable | cut -f1 -d"/" | grep -v Listing
+#    - name: Show Update Results
+#      debug: msg="Package {{ update_results.stdout }} is {{ phased_results.stdout }}"
