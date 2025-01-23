@@ -4,7 +4,7 @@
 # Author: Shamelessly based on the Windows update playbook from u/zoredache on r/ansible
 
 # Process
-# Update the APT cache FIRST (requires sudo): ansible-playbook apply_apt_updates.yml --tags update-cache -K
+# Update the APT cache FIRST (requires sudo): ansible-playbook apply_apt_updates.yml --tags cache -K
 # Perform a quick check utilizing the built in MOTD: ansible-playbook apply_apt_updates.yml --tags quick
 # Perform a check that lists the upgradable packages (phased updated WIP): ansible-playbook apply_apt_updates.yml --tags check
 # Perform any non-phased updates (requires sudo): ansible-playbook apply_apt_updates.yml --tags update -K
@@ -12,7 +12,7 @@
 
 - name: Apply APT Updates
   hosts: apt
-  gather_facts: yes
+  gather_facts: no
 
   tasks:
 
@@ -22,9 +22,9 @@
         update_cache: yes
       become: yes
       tags:
-      - update-cache
+      - cache
 
-    - name: MOTD Package Update
+    - name: Gather MOTD Package Update
       shell: bash /etc/update-motd.d/90-updates-available | grep applied
       register: motd_results
       tags:
@@ -77,6 +77,7 @@
     - name: Check if Reboot Required
       stat:
         path: /var/run/reboot-required
+
       register: reboot_required_file
       tags:
       - update
