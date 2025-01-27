@@ -84,6 +84,7 @@
       - check
       - update
       - reboot-check
+      - quick
 
     - name: Show if Reboot Required
       debug: 
@@ -96,6 +97,7 @@
       - update
       - check
       - reboot-check
+      - quick
 
     - name: Reboot if Required
       reboot:
