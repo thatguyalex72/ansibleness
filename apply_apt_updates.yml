@@ -8,6 +8,7 @@
 # Perform a quick check utilizing the built in MOTD: ansible-playbook apply_apt_updates.yml --tags quick
 # Perform a check that lists the upgradable packages (phased updated WIP): ansible-playbook apply_apt_updates.yml --tags check
 # Perform any non-phased updates (requires sudo): ansible-playbook apply_apt_updates.yml --tags update -K
+# Perform a check to see if file "/var/run/reboot-required" exists : ansible-playbook apply_apt_updates.yml --tags reboot-check
 # Perform any needed reboots(requires sudo): ansible-playbook apply_apt_updates.yml --tags reboot -K
 
 - name: Apply APT Updates
@@ -23,6 +24,7 @@
       become: yes
       tags:
       - cache
+      - update
 
     - name: Gather MOTD Package Update
       shell: bash /etc/update-motd.d/90-updates-available | grep applied
@@ -77,11 +79,18 @@
     - name: Check if Reboot Required
       stat:
         path: /var/run/reboot-required
-
       register: reboot_required_file
       tags:
+      - check
       - update
-      - reboot
+      - reboot-check
+
+#    - name: Show if Reboot Required
+#      debug: msg="{{ reboot_required_file.stdout }}"
+#      tags:
+#      - update
+#      - check
+#      - reboot-check
 
     - name: Reboot if Required
       reboot:
