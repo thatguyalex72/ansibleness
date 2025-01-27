@@ -85,12 +85,17 @@
       - update
       - reboot-check
 
-#    - name: Show if Reboot Required
-#      debug: msg="{{ reboot_required_file.stdout }}"
-#      tags:
-#      - update
-#      - check
-#      - reboot-check
+    - name: Show if Reboot Required
+      debug: 
+        msg="Reboot Required"
+      when: reboot_required_file.stat.exists
+#      debug:
+#        msg="No Reboot Required"
+#      when: reboot_required_file.stat.exists == False
+      tags:
+      - update
+      - check
+      - reboot-check
 
     - name: Reboot if Required
       reboot:
