@@ -82,26 +82,20 @@
       register: reboot_required_file
       tags:
       - check
-      - update
       - reboot-check
-      - quick
+      - reboot
 
     - name: Show if Reboot Required
       debug: 
         msg="Reboot Required"
       when: reboot_required_file.stat.exists
-#      debug:
-#        msg="No Reboot Required"
-#      when: reboot_required_file.stat.exists == False
       tags:
-      - update
       - check
       - reboot-check
-      - quick
 
     - name: Reboot if Required
       reboot:
-      when: reboot_required_file.stat.exists == true
+      when: reboot_required_file.stat.exists 
       become: yes
       tags:
       - reboot
