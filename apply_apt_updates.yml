@@ -35,7 +35,7 @@
       - quick 
 
     - name: Show MOTD
-      debug: msg="{{ motd_results.stdout }}"
+      debug: msg="{{ motd_results.stdout }} "
       tags:
       - update
       - check
