@@ -10,6 +10,8 @@ syslog_publab ansible_host=10.5.11.222
 leo_broker ansible_host=10.5.11.49
 leo_gateway ansible_host=10.5.11.54
 zabby_demolab ansible_host=10.8.12.50
+twingate_publab3 ansible_host=10.5.80.128
+twingate_publab4 ansible_host=10.5.80.130
 
 [apt]
 twingate_demolab1 ansible_host=10.8.12.62
@@ -18,6 +20,8 @@ twingate_demolab3 ansible_host=10.8.12.91
 twingate_demolab4 ansible_host=10.8.12.89
 twingate_publab1 ansible_host=10.5.11.31
 twingate_publab2 ansible_host=10.5.11.47
+twingate_publab3 ansible_host=10.5.80.128
+twingate_publab4 ansible_host=10.5.80.130
 syslog_demolab ansible_host=10.8.12.200
 syslog_publab ansible_host=10.5.11.222
 zabby_demolab ansible_host=10.8.12.50
@@ -29,6 +33,8 @@ twingate_demolab3 ansible_host=10.8.12.91
 twingate_demolab4 ansible_host=10.8.12.89
 twingate_publab1 ansible_host=10.5.11.31
 twingate_publab2 ansible_host=10.5.11.47
+twingate_publab3 ansible_host=10.5.80.128
+twingate_publab4 ansible_host=10.5.80.130
 
 [syslog]
 syslog_demolab ansible_host=10.8.12.200
@@ -50,4 +56,6 @@ zabby_demolab ansible_host=10.8.12.50
 [publab]
 twingate_publab1 ansible_host=10.5.11.31
 twingate_publab2 ansible_host=10.5.11.47
+twingate_publab3 ansible_host=10.5.80.128
+twingate_publab4 ansible_host=10.5.80.130
 syslog_publab ansible_host=10.5.11.222

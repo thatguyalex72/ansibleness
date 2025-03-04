@@ -6,7 +6,8 @@
 # Process
 # Update the APT cache FIRST (requires sudo): ansible-playbook apply_apt_updates.yml --tags cache -K
 # Perform a quick check utilizing the built in MOTD: ansible-playbook apply_apt_updates.yml --tags quick
-# Perform a check that lists the upgradable packages (phased updated WIP): ansible-playbook apply_apt_updates.yml --tags check
+# List available updates: ansible-playbook apple_apt_updates.yml --tags list
+# Perform a check that lists the upgradable packages and if a reboot is needed (phased updated WIP): ansible-playbook apply_apt_updates.yml --tags check
 # Perform any non-phased updates (requires sudo): ansible-playbook apply_apt_updates.yml --tags update -K
 # Perform a check to see if file "/var/run/reboot-required" exists : ansible-playbook apply_apt_updates.yml --tags reboot-check
 # Perform any needed reboots(requires sudo): ansible-playbook apply_apt_updates.yml --tags reboot -K
@@ -47,6 +48,7 @@
       tags:
       - update
       - check
+      - list 
 
 #    - name: Gather Phased Update
 #      shell: apt list 2>/dev/null --upgradable | cut -f1 -d"/" | grep -v Listing | xargs -L1 apt policy 2>/dev/null | grep phased
@@ -60,6 +62,7 @@
       tags:
       - update
       - check
+      - list
 
     - name: Upgrade Dist
       ansible.builtin.apt:
