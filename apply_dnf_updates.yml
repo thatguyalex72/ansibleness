@@ -2,6 +2,17 @@
 - name: Update Everything on Linux RHEL based VMs
   hosts: leo
 
+# DESCRIPTION
+# Apply DNF updates
+# Author: Shamelessly based on the Windows update playbook from u/zoredache on r/ansible
+
+# Process
+# List available updates: ansible-playbook apple_DNF_updates.yml --tags list
+# Perform a check that lists the upgradable packages and if a reboot is needed: ansible-playbook apply_dnf_updates.yml --tags check
+# Perform any non-phased updates (requires sudo): ansible-playbook apply_dnf_updates.yml --tags update -K
+# Perform a check to see if file "/var/run/reboot-required" exists : ansible-playbook apply_dnf_updates.yml --tags reboot-check
+# Perform any needed reboots(requires sudo): ansible-playbook apply_dnf_updates.yml --tags reboot -K
+
   tasks:
     - name: Gather Upgradable Packages
       shell: dnf check-update
@@ -9,12 +20,14 @@
       tags:
       - check
       - update
+      - list
 
     - name: Show dnf Output
       debug: msg="{{ result.stdout }}"
       tags:
       - check
       - update
+      - list
 
     - name: Upgrade dnf
       become: yes
@@ -38,7 +51,17 @@
       tags:
       - check
       - update
+      - reboot-check
     
+    - name: Reboot Required?
+      debug:
+        msg="Reboot Required"
+      when: reboot_required_file.stat.exists
+      tags:
+      - check
+      - update
+      - reboot-check
+
     - name: Reboot if Required
       become: yes
       reboot:

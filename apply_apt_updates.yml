@@ -7,7 +7,7 @@
 # Update the APT cache FIRST (requires sudo): ansible-playbook apply_apt_updates.yml --tags cache -K
 # Perform a quick check utilizing the built in MOTD: ansible-playbook apply_apt_updates.yml --tags quick
 # List available updates: ansible-playbook apple_apt_updates.yml --tags list
-# Perform a check that lists the upgradable packages and if a reboot is needed (phased updated WIP): ansible-playbook apply_apt_updates.yml --tags check
+# Perform a check that lists the upgradable packages and if a reboot is needed: ansible-playbook apply_apt_updates.yml --tags check
 # Perform any non-phased updates (requires sudo): ansible-playbook apply_apt_updates.yml --tags update -K
 # Perform a check to see if file "/var/run/reboot-required" exists : ansible-playbook apply_apt_updates.yml --tags reboot-check
 # Perform any needed reboots(requires sudo): ansible-playbook apply_apt_updates.yml --tags reboot -K
@@ -94,6 +94,7 @@
       when: reboot_required_file.stat.exists
       tags:
       - check
+      - reboot
       - reboot-check
 
     - name: Reboot if Required
