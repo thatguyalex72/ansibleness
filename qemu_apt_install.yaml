@@ -43,6 +43,15 @@
 #        name: btop
 #        state: present
 
+    - name: Install Arping
+      apt:
+        name:
+          - arping
+        state: present
+      tags:
+      - install
+      - arping
+
     - name: Install ClamAV
       apt:
         name:
