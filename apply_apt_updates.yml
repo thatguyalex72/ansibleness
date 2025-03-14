@@ -103,9 +103,3 @@
       become: yes
       tags:
       - reboot
-
-# Needs more refinement
-#    - name: Gather Upgradable Packages
-#      shell: apt list 2>/dev/null --upgradable | cut -f1 -d"/" | grep -v Listing
-#    - name: Show Update Results
-#      debug: msg="Package {{ update_results.stdout }} is {{ phased_results.stdout }}"
