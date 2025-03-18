@@ -1,0 +1,25 @@
+---
+  - name: Install iperf and Test Connection
+    hosts: virtnet
+
+    tasks:
+
+    - name: Install iperf
+      apt:
+        name:
+          - iperf 
+        state: present
+      become: yes
+      tags:
+      - install
+
+    - name: Run iperf
+      shell: iperf -c speedtest.novoserve.com -p 5201 -P 20 
+      register: iperf_results
+      tags:
+      - test
+
+    - name: Show iperf Results
+      debug: msg="{{ iperf_results.stdout }} "
+      tags:
+      - test

@@ -25,6 +25,11 @@ twingate_publab4 ansible_host=10.5.80.130
 syslog_demolab ansible_host=10.8.12.200
 syslog_publab ansible_host=10.5.11.222
 zabby_demolab ansible_host=10.8.12.50
+ub80.1 ansible_host=10.5.80.111
+ub80.2 ansible_host=10.5.80.112
+ub80.3 ansible_host=10.5.80.113
+ub80.4 ansible_host=10.5.80.115
+ub80.5 ansible_host=10.5.80.114
 
 [twingate]
 twingate_demolab1 ansible_host=10.8.12.62
@@ -58,4 +63,11 @@ twingate_publab1 ansible_host=10.5.11.31
 twingate_publab2 ansible_host=10.5.11.47
 twingate_publab3 ansible_host=10.5.80.128
 twingate_publab4 ansible_host=10.5.80.130
-syslog_publab ansible_host=10.5.11.222
+syslog_publab ansible_host=10.5.11.222 
+
+[virtnet]
+ub80.1 ansible_host=10.5.80.111
+ub80.2 ansible_host=10.5.80.112
+ub80.3 ansible_host=10.5.80.113
+ub80.4 ansible_host=10.5.80.115
+ub80.5 ansible_host=10.5.80.114
