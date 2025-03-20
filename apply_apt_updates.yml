@@ -31,14 +31,12 @@
       shell: bash /etc/update-motd.d/90-updates-available | grep applied
       register: motd_results
       tags:
-      - update
       - check
       - quick 
 
     - name: Show MOTD
       debug: msg="{{ motd_results.stdout }} "
       tags:
-      - update
       - check
       - quick 
 
@@ -46,7 +44,6 @@
       shell: apt list --upgradable 
       register: update_results
       tags:
-      - update
       - check
       - list 
 
@@ -60,7 +57,6 @@
     - name: Show Update Results
       debug: msg="{{ update_results.stdout }}"
       tags:
-      - update
       - check
       - list
 
