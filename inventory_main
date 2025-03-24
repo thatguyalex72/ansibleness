@@ -71,6 +71,8 @@ twingate_publab4 ansible_host=10.5.80.130
 syslog_publab ansible_host=10.5.11.222 
 
 [virtnet]
+twingate_publab3 ansible_host=10.5.80.128
+twingate_publab4 ansible_host=10.5.80.130
 ub80.1 ansible_host=10.5.80.111
 ub80.2 ansible_host=10.5.80.112
 ub80.3 ansible_host=10.5.80.113
