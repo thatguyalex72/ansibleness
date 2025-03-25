@@ -10,7 +10,7 @@
 # Perform a check that lists the upgradable packages and if a reboot is needed: ansible-playbook apply_apt_updates.yml --tags check
 # Perform any non-phased updates (requires sudo): ansible-playbook apply_apt_updates.yml --tags update -K
 # Perform a check to see if file "/var/run/reboot-required" exists : ansible-playbook apply_apt_updates.yml --tags reboot-check
-# Perform any needed reboots(requires sudo): ansible-playbook apply_apt_updates.yml --tags reboot -K
+# Perform any needed reboots, will skip VMs that do not need it (requires sudo): ansible-playbook apply_apt_updates.yml --tags reboot -K
 
 - name: Apply APT Updates
   hosts: apt
@@ -54,13 +54,13 @@
 #      - update
 #      - check
 
-    - name: Show Update Results
+    - name: Show Upgradable Packages
       debug: msg="{{ update_results.stdout }}"
       tags:
       - check
       - list
 
-    - name: Upgrade Dist
+    - name: Upgrade
       ansible.builtin.apt:
         upgrade: dist  
       become: yes
