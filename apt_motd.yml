@@ -10,38 +10,19 @@
   tasks:
 
   - block:
-    - name: Gather Landscape
-      shell: bash /etc/update-motd.d/50-landscape-sysinfo
-      register: landscape_results
-      tags:
-      - landscape
-
-    - name: Show Landscape
-      debug: msg="{{ landscape_results.stdout }}"
-      tags:
-      - landscape
-
-    - name: Gather Updates Package Update
+    - name: Gather MOTD Package Update
       shell: bash /etc/update-motd.d/90-updates-available | grep applied
-      register: update_results
-      tags:
-      - update
+      register: motd_results
 
-    - name: Show Updates
-      debug: msg="{{ update_results.stdout }}"
-      tags:
-      - update
+    - name: Show MOTD
+      debug: msg="{{ motd_results.stdout }}"
 
     - name: Check if Reboot Required
       stat:
         path: /var/run/reboot-required
       register: reboot_required_file
-      tags:
-      - reboot
 
     - name: Show if Reboot Required
       debug: 
         msg="Reboot Required"
       when: reboot_required_file.stat.exists
-      tags:
-      - reboot
