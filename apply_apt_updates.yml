@@ -34,12 +34,6 @@
       - check
       - quick 
 
-    - name: Show MOTD
-      debug: msg="{{ motd_results.stdout }} "
-      tags:
-      - check
-      - quick 
-
     - name: Gather Upgradable Packages
       shell: apt list --upgradable 
       register: update_results
@@ -53,12 +47,6 @@
 #      tags:
 #      - update
 #      - check
-
-    - name: Show Upgradable Packages
-      debug: msg="{{ update_results.stdout }}"
-      tags:
-      - check
-      - list
 
     - name: Upgrade
       ansible.builtin.apt:
@@ -81,8 +69,20 @@
       register: reboot_required_file
       tags:
       - check
-      - reboot-check
+      - rebovot-check
       - reboot
+
+    - name: Show MOTD
+      debug: msg="{{ motd_results.stdout }} "
+      tags:
+      - check
+      - quick
+
+    - name: Show Upgradable Packages
+      debug: msg="{{ update_results.stdout }}"
+      tags:
+      - check
+      - list
 
     - name: Show if Reboot Required
       debug: 
