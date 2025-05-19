@@ -69,20 +69,20 @@
       register: reboot_required_file
       tags:
       - check
-      - rebovot-check
+      - reboot-check
       - reboot
-
-    - name: Show MOTD
-      debug: msg="{{ motd_results.stdout }} "
-      tags:
-      - check
-      - quick
 
     - name: Show Upgradable Packages
       debug: msg="{{ update_results.stdout }}"
       tags:
       - check
       - list
+
+    - name: Show MOTD
+      debug: msg="{{ motd_results.stdout }} "
+      tags:
+      - check
+      - quick
 
     - name: Show if Reboot Required
       debug: 
