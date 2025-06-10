@@ -84,7 +84,7 @@
       - check
       - quick
 
-    - name: Show if Reboot Required
+    - name: Reboot Required?
       debug: 
         msg="Reboot Required"
       when: reboot_required_file.stat.exists
