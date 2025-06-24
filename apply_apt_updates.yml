@@ -3,7 +3,7 @@
 # Apply APT updates
 # Author: Shamelessly based on the Windows update playbook from u/zoredache on r/ansible
 
-# Process
+# Process!!
 # Update the APT cache FIRST (requires sudo): ansible-playbook apply_apt_updates.yml --tags cache -K
 # Perform a quick check utilizing the built in MOTD: ansible-playbook apply_apt_updates.yml --tags quick
 # List available updates: ansible-playbook apple_apt_updates.yml --tags list
@@ -11,6 +11,8 @@
 # Perform any non-phased updates (requires sudo): ansible-playbook apply_apt_updates.yml --tags update -K
 # Perform a check to see if file "/var/run/reboot-required" exists : ansible-playbook apply_apt_updates.yml --tags reboot-check
 # Perform any needed reboots, will skip VMs that do not need it (requires sudo): ansible-playbook apply_apt_updates.yml --tags reboot -K
+# To limit the playbook to any hosts or group use the -l tag -  -l 'all:!shoresy' will use all hosts except the internal lab labeled "shoresy"
+
 
 - name: Apply APT Updates
   hosts: apt
