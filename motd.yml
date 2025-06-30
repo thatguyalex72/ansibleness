@@ -16,19 +16,9 @@
       tags:
       - landscape
 
-    - name: Show Landscape
-      debug: msg="{{ landscape_results.stdout }}"
-      tags:
-      - landscape
-
     - name: Gather Updates Package Update
       shell: bash /etc/update-motd.d/90-updates-available | grep applied
       register: update_results
-      tags:
-      - update
-
-    - name: Show Updates
-      debug: msg="{{ update_results.stdout }}"
       tags:
       - update
 
@@ -38,6 +28,16 @@
       register: reboot_required_file
       tags:
       - reboot
+
+    - name: Show Landscape
+      debug: msg="{{ landscape_results.stdout }}"
+      tags:
+      - landscape
+
+    - name: Show Updates
+      debug: msg="{{ update_results.stdout }}"
+      tags:
+      - update
 
     - name: Show if Reboot Required
       debug: 
