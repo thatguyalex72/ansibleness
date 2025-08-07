@@ -17,6 +17,7 @@ jellyfin ansible_host=192.168.5.15
 zabby_shoresy ansible_host=192.168.5.12
 juiceshop ansible_host=192.168.5.22
 dvwa ansible_host=192.168.5.21
+crowdsec_shoresy ansible_host=192.168.5.29
 
 [apt]
 twingate_demolab1 ansible_host=10.8.12.62
@@ -35,6 +36,7 @@ jellyfin ansible_host=192.168.5.15
 zabby_shoresy ansible_host=192.168.5.12
 juiceshop ansible_host=192.168.5.22
 dvwa ansible_host=192.168.5.21
+crowdsec_shoresy ansible_host=192.168.5.29
 
 [twingate]
 twingate_demolab1 ansible_host=10.8.12.62
@@ -80,3 +82,4 @@ jellyfin ansible_host=192.168.5.15
 zabby_shoresy ansible_host=192.168.5.12
 juiceshop ansible_host=192.168.5.22
 dvwa ansible_host=192.168.5.21
+crowdsec_shoresy ansible_host=192.168.5.29

@@ -27,7 +27,6 @@
       become: yes
       tags:
       - cache
-      - update
 
     - name: Gather MOTD Package Update
       shell: bash /etc/update-motd.d/90-updates-available | grep applied
