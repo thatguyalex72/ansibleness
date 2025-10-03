@@ -1,0 +1,27 @@
+---
+  - name: Install QEMU Guest Agent
+    hosts: leo 
+    become: yes
+
+    tasks:
+
+    - name: Install Qemu Guest Agent
+      dnf:
+        name:
+          - qemu-guest-agent
+        state: present
+
+    - name: Ensure QEMU is Started
+      systemd:
+        name: qemu-guest-agent
+        state: started
+        enabled: yes
+
+    - name: Gather QEMU Status
+      ansible.builtin.systemd:
+        name: qemu-guest-agent.service
+      register: qemu_status
+
+    - name: Print QEMU Status
+      debug:
+        var: qemu_status.status.ActiveState
