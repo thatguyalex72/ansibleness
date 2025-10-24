@@ -13,7 +13,6 @@ twingate_publab4 ansible_host=10.5.80.130
 jellyfin ansible_host=192.168.5.15
 juiceshop ansible_host=192.168.5.22
 dvwa ansible_host=192.168.5.21
-opsi_demo ansible_host=10.8.12.42
 leo_gateway ansible_host=10.5.11.54
 
 [apt]
@@ -31,7 +30,6 @@ zabby_demolab ansible_host=10.8.12.50
 jellyfin ansible_host=192.168.5.15
 juiceshop ansible_host=192.168.5.22
 dvwa ansible_host=192.168.5.21
-opsi_demo ansible_host=10.8.12.42
 
 [twingate]
 twingate_demolab1 ansible_host=10.8.12.62
@@ -57,7 +55,6 @@ twingate_demolab3 ansible_host=10.8.12.91
 twingate_demolab4 ansible_host=10.8.12.89
 syslog_demolab ansible_host=10.8.12.200
 zabby_demolab ansible_host=10.8.12.50
-opsi_demo ansible_host=10.8.12.42
 
 [publab]
 twingate_publab1 ansible_host=10.5.11.31
