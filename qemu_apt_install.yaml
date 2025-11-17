@@ -1,7 +1,6 @@
 ---
   - name: Install QEMU Guest Agent, Bashtop, and ClamAV
     hosts: apt 
-    become: yes
 
     tasks:
 
@@ -10,6 +9,7 @@
         name:
           - qemu-guest-agent
         state: present
+      become: yes
       tags:
       - install
       - qemu
@@ -28,14 +28,14 @@
         name: qemu-guest-agent.service
       register: qemu_status
       tags:
-      - services
+      - services-check
       - qemu
 
     - name: Print QEMU Status
       debug:
         var: qemu_status.ActiveState
       tags:
-      - services
+      - services-check
       - qemu
 
 #    - name: Ensure Bashtop is installed
@@ -48,6 +48,7 @@
         name:
           - arping
         state: present
+      become: yes
       tags:
       - install
       - arping
@@ -57,6 +58,7 @@
         name:
           - net-tools
         state: present
+      become: yes
       tags:
       - install
       - net-tools
@@ -67,6 +69,7 @@
           - clamav
           - clamav-daemon
           - clamav-testfiles
+      become: yes
       tags:
       - install
       - clam
@@ -85,12 +88,12 @@
         name: "clamav-daemon"
       register: clamav_status
       tags:
-      - services
+      - services-check
       - clam
 
     - name: Print ClamAV Status
       debug:
         var: clamav_status.status.ActiveState
       tags:
-      - services
+      - services-check
       - clam
