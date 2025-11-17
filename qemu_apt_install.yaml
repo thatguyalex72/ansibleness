@@ -23,20 +23,20 @@
       - services
       - qemu
 
-#   - name: Gather QEMU Status
-#      ansible.builtin.systemd:
-#        name: qemu-guest-agent.service
-#      register: qemu_status
-#      tags:
-#      - services
-#      - qemu
+    - name: Gather QEMU Status
+      ansible.builtin.systemd:
+        name: qemu-guest-agent.service
+      register: qemu_status
+      tags:
+      - services
+      - qemu
 
-#    - name: Print QEMU Status
-#      debug:
-#        var: qemu_status.status.ActiveState
-#      tags:
-#      - services
-#      - qemu
+    - name: Print QEMU Status
+      debug:
+        var: qemu_status.ActiveState
+      tags:
+      - services
+      - qemu
 
 #    - name: Ensure Bashtop is installed
 #      apt:
@@ -51,6 +51,15 @@
       tags:
       - install
       - arping
+
+    - name: Install Net-Tools
+      apt:
+        name:
+          - net-tools
+        state: present
+      tags:
+      - install
+      - net-tools
 
     - name: Install ClamAV
       apt:
