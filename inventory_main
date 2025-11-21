@@ -78,3 +78,4 @@ twingate_publab4 ansible_host=10.5.80.130
 jellyfin ansible_host=192.168.5.15
 juiceshop ansible_host=192.168.5.22
 dvwa ansible_host=192.168.5.21
+wazuh_shoresy ansible_host=192.168.5.57
