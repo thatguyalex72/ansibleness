@@ -4,11 +4,11 @@
 # Author: Shamelessly based on the Windows update playbook from u/zoredache on r/ansible
 
 # Process!!
-# Update the APT cache FIRST (requires sudo): ansible-playbook apply_apt_updates.yml --tags cache -K
+# Update the APT cache FIRST (requires sudo): ansible-playbook apply_apt_updates.yml --tags update -K
 # Perform a quick check utilizing the built in MOTD: ansible-playbook apply_apt_updates.yml --tags quick
 # List available updates: ansible-playbook apple_apt_updates.yml --tags list
 # Perform a check that lists the upgradable packages and if a reboot is needed: ansible-playbook apply_apt_updates.yml --tags check
-# Perform any non-phased updates (requires sudo): ansible-playbook apply_apt_updates.yml --tags update -K
+# Perform any non-phased updates (requires sudo): ansible-playbook apply_apt_updates.yml --tags upgrade -K
 # Perform a check to see if file "/var/run/reboot-required" exists : ansible-playbook apply_apt_updates.yml --tags reboot-check
 # Perform any needed reboots, will skip VMs that do not need it (requires sudo): ansible-playbook apply_apt_updates.yml --tags reboot -K
 # To limit the playbook to any hosts or group use the -l tag -  -l 'all:!shoresy' will use all hosts except the internal lab labeled "shoresy"
@@ -26,7 +26,7 @@
         update_cache: yes
       become: yes
       tags:
-      - cache
+      - update 
 
     - name: Gather MOTD Package Update
       shell: bash /etc/update-motd.d/90-updates-available | grep applied
@@ -54,7 +54,7 @@
         upgrade: dist  
       become: yes
       tags:
-      - update
+      - upgrade
 
     - name: Cleanup
       ansible.builtin.apt:
@@ -62,7 +62,7 @@
         autoremove: yes
       become: yes
       tags:
-      - update
+      - upgrade
 
     - name: Check if Reboot Required
       stat:
