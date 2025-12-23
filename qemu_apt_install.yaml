@@ -15,8 +15,9 @@
       - qemu
 
     - name: Ensure QEMU is Started
-      service:
+      ansible.builtin.systemd_service:
         name: qemu-guest-agent
+        #daemon_reload: true
         state: started
         enabled: yes
       tags:
@@ -25,7 +26,7 @@
 
     - name: Gather QEMU Status
       ansible.builtin.systemd:
-        name: qemu-guest-agent.service
+        name: "qemu-guest-agent"
       register: qemu_status
       tags:
       - services-check
@@ -33,7 +34,7 @@
 
     - name: Print QEMU Status
       debug:
-        var: qemu_status.ActiveState
+        var: qemu_status.status.ActiveState
       tags:
       - services-check
       - qemu
@@ -63,37 +64,37 @@
       - install
       - net-tools
 
-    - name: Install ClamAV
-      apt:
-        name:
-          - clamav
-          - clamav-daemon
-          - clamav-testfiles
-      become: yes
-      tags:
-      - install
-      - clam
+#    - name: Install ClamAV
+#      apt:
+#        name:
+#          - clamav
+#          - clamav-daemon
+#          - clamav-testfiles
+#      become: yes
+#      tags:
+#      - install
+#      - clam
 
-    - name: Ensure ClamAV is Started
-      service:
-        name: clamav-daemon
-        state: started
-        enabled: yes
-      tags:
-      - services
-      - clam
+#    - name: Ensure ClamAV is Started
+#      ansible.builtin.systemd_service:
+#        name: clamav-daemon
+#        state: started
+#        enabled: yes
+#      tags:
+#      - services
+#      - clam
 
-    - name: Gather ClamAV Status
-      ansible.builtin.systemd:
-        name: "clamav-daemon"
-      register: clamav_status
-      tags:
-      - services-check
-      - clam
+#    - name: Gather ClamAV Status
+#      ansible.builtin.systemd:
+#        name: "clamav-daemon"
+#      register: clamav_status
+#      tags:
+#      - services-check
+#      - clam
 
-    - name: Print ClamAV Status
-      debug:
-        var: clamav_status.status.ActiveState
-      tags:
-      - services-check
-      - clam
+#    - name: Print ClamAV Status
+#      debug:
+#        var: clamav_status.status.ActiveState
+#      tags:
+#      - services-check
+#      - clam

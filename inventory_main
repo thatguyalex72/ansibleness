@@ -19,6 +19,7 @@ dvwa ansible_host=192.168.5.21
 wazuh_shoresy ansible_host=192.168.5.57
 copilot_shoresy ansible_host=192.168.5.61
 opsi_demo ansible_host=10.8.12.110
+authentik_demo ansible_host=10.8.12.49
 
 [apt]
 twingate_demolab1 ansible_host=10.8.12.62
@@ -40,6 +41,7 @@ dvwa ansible_host=192.168.5.21
 wazuh_shoresy ansible_host=192.168.5.57
 copilot_shoresy ansible_host=192.168.5.61
 opsi_demo ansible_host=10.8.12.110
+authentik_demo ansible_host=10.8.12.49
 
 [twingate]
 twingate_demolab1 ansible_host=10.8.12.62
@@ -69,6 +71,7 @@ syslog_demolab ansible_host=10.8.12.200
 zabby_demolab ansible_host=10.8.12.50
 wazuh_demolab ansible_host=10.8.12.44
 opsi_demo ansible_host=10.8.12.110
+authentik_demo ansible_host=10.8.12.49
 
 [publab]
 twingate_publab1 ansible_host=10.5.11.31
