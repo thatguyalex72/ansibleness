@@ -17,9 +17,9 @@ jellyfin ansible_host=192.168.5.15
 juiceshop ansible_host=192.168.5.22
 dvwa ansible_host=192.168.5.21
 wazuh_shoresy ansible_host=192.168.5.57
-opsi_demo ansible_host=10.8.12.110
 authentik_demo ansible_host=10.8.12.49
 docker_demolab ansible_host=10.8.12.42
+opsi_demo ansible_host=10.8.12.35
 
 [apt]
 twingate_demolab1 ansible_host=10.8.12.62
@@ -39,9 +39,9 @@ jellyfin ansible_host=192.168.5.15
 juiceshop ansible_host=192.168.5.22
 dvwa ansible_host=192.168.5.21
 wazuh_shoresy ansible_host=192.168.5.57
-opsi_demo ansible_host=10.8.12.110
 authentik_demo ansible_host=10.8.12.49
 docker_demolab ansible_host=10.8.12.42
+opsi_demo ansible_host=10.8.12.35
 
 [twingate]
 twingate_demolab1 ansible_host=10.8.12.62
@@ -70,9 +70,9 @@ twingate_demolab4 ansible_host=10.8.12.89
 syslog_demolab ansible_host=10.8.12.200
 zabby_demolab ansible_host=10.8.12.50
 wazuh_demolab ansible_host=10.8.12.44
-opsi_demo ansible_host=10.8.12.110
 authentik_demo ansible_host=10.8.12.49
 docker_demolab ansible_host=10.8.12.42
+opsi_demo ansible_host=10.8.12.35
 
 [publab]
 twingate_publab1 ansible_host=10.5.11.31
