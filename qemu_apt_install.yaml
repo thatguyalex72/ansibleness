@@ -1,6 +1,7 @@
 ---
   - name: Install QEMU Guest Agent, Bashtop, and ClamAV
     hosts: apt 
+    become: yes
 
     tasks:
 
@@ -9,7 +10,6 @@
         name:
           - qemu-guest-agent
         state: present
-      become: yes
       tags:
       - install
       - qemu
