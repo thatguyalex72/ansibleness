@@ -1,0 +1,224 @@
+---
+# DESCRIPTION
+# Apply updates to all Linux VMs regardless of package manager (APT, DNF, or YUM)
+# Author: Shamelessly based on the Windows update playbook from u/zoredache on r/ansible
+
+# Usage:
+# Update cache only (requires sudo):
+#   ansible-playbook apply_all_linux_updates.yml --tags update -K
+# Quick check via MOTD (APT) or check-update (DNF/YUM):
+#   ansible-playbook apply_all_linux_updates.yml --tags quick
+# List all upgradable packages:
+#   ansible-playbook apply_all_linux_updates.yml --tags list
+# Full check - list upgradable packages and reboot status:
+#   ansible-playbook apply_all_linux_updates.yml --tags check
+# Upgrade all packages (requires sudo):
+#   ansible-playbook apply_all_linux_updates.yml --tags upgrade -K
+# Check if reboot is required:
+#   ansible-playbook apply_all_linux_updates.yml --tags reboot-check
+# Reboot hosts that require it (requires sudo):
+#   ansible-playbook apply_all_linux_updates.yml --tags reboot -K
+# Limit to a subset of hosts: add -l 'groupname' or -l 'all:!shoresy'
+
+
+- name: Apply All Linux Updates
+  hosts: linux
+  gather_facts: yes
+
+  tasks:
+
+  # ── APT (Debian / Ubuntu) ─────────────────────────────────────────────────
+
+  - name: Update APT cache
+    ansible.builtin.apt:
+      update_cache: yes
+    become: yes
+    when: ansible_facts['pkg_mgr'] == 'apt'
+    tags:
+    - update
+
+  - name: Gather MOTD package update info (APT)
+    shell: bash /etc/update-motd.d/90-updates-available | grep applied
+    register: motd_results
+    when: ansible_facts['pkg_mgr'] == 'apt'
+    tags:
+    - check
+    - quick
+
+  - name: List upgradable packages (APT)
+    shell: apt list --upgradable
+    register: apt_update_results
+    when: ansible_facts['pkg_mgr'] == 'apt'
+    tags:
+    - check
+    - list
+
+  - name: Upgrade packages (APT dist-upgrade)
+    ansible.builtin.apt:
+      upgrade: dist
+    become: yes
+    when: ansible_facts['pkg_mgr'] == 'apt'
+    tags:
+    - upgrade
+
+  - name: Cleanup (APT)
+    ansible.builtin.apt:
+      autoclean: yes
+      autoremove: yes
+    become: yes
+    when: ansible_facts['pkg_mgr'] == 'apt'
+    tags:
+    - upgrade
+
+  - name: Check if reboot required (APT)
+    stat:
+      path: /var/run/reboot-required
+    register: apt_reboot_file
+    when: ansible_facts['pkg_mgr'] == 'apt'
+    tags:
+    - check
+    - reboot-check
+    - reboot
+
+  # ── DNF / YUM (RHEL / AlmaLinux / CentOS) ────────────────────────────────
+
+  - name: Update package cache (DNF/YUM)
+    shell: "{{ ansible_facts['pkg_mgr'] }} makecache"
+    become: yes
+    when: ansible_facts['pkg_mgr'] in ['dnf', 'yum']
+    tags:
+    - update
+
+  - name: List available updates (DNF/YUM)
+    shell: "{{ ansible_facts['pkg_mgr'] }} check-update"
+    register: rhel_update_results
+    failed_when: rhel_update_results.rc not in [0, 100]
+    when: ansible_facts['pkg_mgr'] in ['dnf', 'yum']
+    tags:
+    - check
+    - quick
+    - list
+
+  - name: Upgrade packages (DNF)
+    ansible.builtin.dnf:
+      name: '*'
+      state: latest
+      update_cache: no
+    become: yes
+    when: ansible_facts['pkg_mgr'] == 'dnf'
+    tags:
+    - upgrade
+
+  - name: Upgrade packages (YUM)
+    ansible.builtin.yum:
+      name: '*'
+      state: latest
+      update_cache: no
+    become: yes
+    when: ansible_facts['pkg_mgr'] == 'yum'
+    tags:
+    - upgrade
+
+  - name: Cleanup unused packages (DNF)
+    ansible.builtin.dnf:
+      autoremove: yes
+    become: yes
+    when: ansible_facts['pkg_mgr'] == 'dnf'
+    tags:
+    - upgrade
+
+  - name: Cleanup unused packages (YUM)
+    ansible.builtin.yum:
+      autoremove: yes
+    become: yes
+    when: ansible_facts['pkg_mgr'] == 'yum'
+    tags:
+    - upgrade
+
+  - name: Check if reboot required (DNF/YUM)
+    shell: needs-restarting -r
+    register: rhel_reboot_check
+    become: yes
+    failed_when: false
+    when: ansible_facts['pkg_mgr'] in ['dnf', 'yum']
+    tags:
+    - check
+    - reboot-check
+    - reboot
+
+  # ── Display results ───────────────────────────────────────────────────────
+
+  - name: Show MOTD (APT)
+    debug:
+      msg: "{{ motd_results.stdout }}"
+    when:
+    - ansible_facts['pkg_mgr'] == 'apt'
+    - motd_results is defined
+    tags:
+    - check
+    - quick
+
+  - name: Show upgradable packages (APT)
+    debug:
+      msg: "{{ apt_update_results.stdout }}"
+    when:
+    - ansible_facts['pkg_mgr'] == 'apt'
+    - apt_update_results is defined
+    tags:
+    - check
+    - list
+
+  - name: Show available updates (DNF/YUM)
+    debug:
+      msg: "{{ rhel_update_results.stdout }}"
+    when:
+    - ansible_facts['pkg_mgr'] in ['dnf', 'yum']
+    - rhel_update_results is defined
+    tags:
+    - check
+    - quick
+    - list
+
+  - name: Reboot required? (APT)
+    debug:
+      msg: "Reboot Required"
+    when:
+    - ansible_facts['pkg_mgr'] == 'apt'
+    - apt_reboot_file is defined
+    - apt_reboot_file.stat.exists
+    tags:
+    - check
+    - reboot-check
+    - reboot
+
+  - name: Reboot required? (DNF/YUM)
+    debug:
+      msg: "Reboot Required"
+    when:
+    - ansible_facts['pkg_mgr'] in ['dnf', 'yum']
+    - rhel_reboot_check is defined
+    - rhel_reboot_check.rc == 1
+    tags:
+    - check
+    - reboot-check
+    - reboot
+
+  - name: Reboot if required (APT)
+    reboot:
+    become: yes
+    when:
+    - ansible_facts['pkg_mgr'] == 'apt'
+    - apt_reboot_file is defined
+    - apt_reboot_file.stat.exists
+    tags:
+    - reboot
+
+  - name: Reboot if required (DNF/YUM)
+    reboot:
+    become: yes
+    when:
+    - ansible_facts['pkg_mgr'] in ['dnf', 'yum']
+    - rhel_reboot_check is defined
+    - rhel_reboot_check.rc == 1
+    tags:
+    - reboot
