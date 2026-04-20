@@ -11,7 +11,7 @@
 #   services    - all service enablement checks
 
 - name: Fleet Baseline - Debian and RHEL
-  hosts: all
+  hosts: linux
   become: yes
   gather_facts: yes
 
@@ -134,7 +134,7 @@
       tags: [cockpit, services]
 
     - name: Allow cockpit through firewalld (RHEL)
-      ansible.posix.firewall:
+      ansible.posix.firewalld:
         service: cockpit
         permanent: yes
         state: enabled
