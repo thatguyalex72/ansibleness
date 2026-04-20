@@ -1,0 +1,170 @@
+---
+# Fleet baseline provisioning for Debian and RHEL-based QEMU guests
+# Run after initial OS install to establish a consistent fleet state
+#
+# Tags:
+#   qemu        - QEMU guest agent install + service
+#   packages    - all package installs
+#   security    - fail2ban / firewalld
+#   timesync    - chrony
+#   cockpit     - cockpit web console
+#   services    - all service enablement checks
+
+- name: Fleet Baseline - Debian and RHEL
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  vars:
+    debian_packages:
+      - qemu-guest-agent
+      - btop
+      - tmux
+      - curl
+      - rsync
+      - lsof
+      - vim
+      - net-tools
+      - arping
+      - bash-completion
+      - chrony
+      - fail2ban
+      - cockpit
+
+    rhel_packages:
+      - qemu-guest-agent
+      - btop
+      - tmux
+      - curl
+      - rsync
+      - lsof
+      - vim
+      - net-tools
+      - bash-completion
+      - chrony
+      - fail2ban
+      - cockpit
+      - firewalld
+
+  tasks:
+
+    # ── Debian / Ubuntu ────────────────────────────────────────────────────────
+
+    - name: Update APT cache
+      ansible.builtin.apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+      tags: [packages, qemu]
+
+    - name: Install baseline packages (Debian)
+      ansible.builtin.apt:
+        name: "{{ debian_packages }}"
+        state: present
+      when: ansible_os_family == "Debian"
+      tags: [packages, qemu, security, timesync, cockpit]
+
+    # ── RHEL / AlmaLinux / CentOS ──────────────────────────────────────────────
+
+    - name: Install baseline packages (RHEL)
+      ansible.builtin.dnf:
+        name: "{{ rhel_packages }}"
+        state: present
+      when: ansible_os_family == "RedHat"
+      tags: [packages, qemu, security, timesync, cockpit]
+
+    # ── QEMU Guest Agent ───────────────────────────────────────────────────────
+
+    - name: Daemon reload
+      ansible.builtin.systemd:
+        daemon_reload: yes
+      tags: [qemu, services]
+
+    - name: Enable and start qemu-guest-agent
+      ansible.builtin.systemd:
+        name: qemu-guest-agent
+        state: started
+        enabled: yes
+      tags: [qemu, services]
+
+    - name: Gather qemu-guest-agent status
+      ansible.builtin.systemd:
+        name: qemu-guest-agent
+      register: qemu_status
+      tags: [qemu, services]
+
+    - name: Print qemu-guest-agent status
+      ansible.builtin.debug:
+        var: qemu_status.status.ActiveState
+      tags: [qemu, services]
+
+    # ── Time Sync (chrony) ─────────────────────────────────────────────────────
+
+    - name: Enable and start chronyd
+      ansible.builtin.systemd:
+        name: chronyd
+        state: started
+        enabled: yes
+      tags: [timesync, services]
+
+    # ── Security ───────────────────────────────────────────────────────────────
+
+    - name: Enable and start fail2ban
+      ansible.builtin.systemd:
+        name: fail2ban
+        state: started
+        enabled: yes
+      tags: [security, services]
+
+    - name: Enable and start firewalld (RHEL)
+      ansible.builtin.systemd:
+        name: firewalld
+        state: started
+        enabled: yes
+      when: ansible_os_family == "RedHat"
+      tags: [security, services]
+
+    # ── Cockpit ────────────────────────────────────────────────────────────────
+
+    - name: Enable and start cockpit.socket
+      ansible.builtin.systemd:
+        name: cockpit.socket
+        state: started
+        enabled: yes
+      tags: [cockpit, services]
+
+    - name: Allow cockpit through firewalld (RHEL)
+      ansible.posix.firewall:
+        service: cockpit
+        permanent: yes
+        state: enabled
+      when: ansible_os_family == "RedHat"
+      notify: reload firewalld
+      tags: [cockpit, security]
+
+    # ── Final service status summary ───────────────────────────────────────────
+
+    - name: Gather status of all managed services
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+      register: svc_status
+      loop:
+        - qemu-guest-agent
+        - chronyd
+        - fail2ban
+        - cockpit.socket
+      tags: [services]
+
+    - name: Print service status summary
+      ansible.builtin.debug:
+        msg: "{{ item.item }}: {{ item.status.ActiveState }}"
+      loop: "{{ svc_status.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+      tags: [services]
+
+  handlers:
+    - name: reload firewalld
+      ansible.builtin.systemd:
+        name: firewalld
+        state: reloaded

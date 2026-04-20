@@ -1,103 +1,171 @@
 ---
-  - name: Apply Windows Updates
-    hosts: win
-    gather_facts: false
-    become: true
+# DESCRIPTION
+# Apply Windows Updates
+# Author: Shamelessly based on the Windows update playbook from u/zoredache on r/ansible
+
+# Usage:
+# Check for available updates and reboot status:
+#   ansible-playbook windows/apply_windows_updates.yml --tags check -i windows/win_inventory
+# List available updates by category:
+#   ansible-playbook windows/apply_windows_updates.yml --tags list -i windows/win_inventory
+# Install all updates (requires reboot if needed):
+#   ansible-playbook windows/apply_windows_updates.yml --tags upgrade -i windows/win_inventory
+# Security updates only:
+#   ansible-playbook windows/apply_windows_updates.yml --tags security -i windows/win_inventory
+# Critical updates only:
+#   ansible-playbook windows/apply_windows_updates.yml --tags critical -i windows/win_inventory
+# Update rollups only:
+#   ansible-playbook windows/apply_windows_updates.yml --tags rollup -i windows/win_inventory
+# Check if a reboot is pending (no update search):
+#   ansible-playbook windows/apply_windows_updates.yml --tags reboot-check -i windows/win_inventory
+# Reboot hosts with a pending reboot:
+#   ansible-playbook windows/apply_windows_updates.yml --tags reboot -i windows/win_inventory
+# Limit to specific hosts or groups: add -l 'hostname' or -l 'win:!dc01'
+
+
+- name: Apply Windows Updates
+  hosts: win
+  gather_facts: no
+
+  tasks:
+
+  # ── Check / List ──────────────────────────────────────────────────────────
+
+  - name: Search for available updates
+    ansible.windows.win_updates:
+      state: searched
+    become: yes
     become_method: runas
     become_user: SYSTEM
+    register: available_updates
+    tags:
+    - check
+    - list
 
-    tasks:
+  - name: Show available updates
+    debug:
+      var: available_updates.updates
+    tags:
+    - check
+    - list
 
-    - name: Check for Missing Windows Updates
-      win_updates: 
-        state=searched
-      register: missing_updates
-      tags:
-      - check
-      - update
-      - security
-      - critical
-      - rollup
+  - name: Show update count and reboot status
+    debug:
+      msg: "Found {{ available_updates.found_update_count }} update(s). Reboot required: {{ available_updates.reboot_required }}"
+    tags:
+    - check
+    - list
 
-    - name: Missing Windows Updates
-      debug:
-        var: missing_updates.filtered_updates 
-      tags:
-      - check
-      - update
-      - security
-      - critical
-      - rollup
+  # ── Reboot check (registry only, no update search) ───────────────────────
 
-    - name: Reboot Required?
-      debug:
-        var: missing_updates.reboot_required
-      tags:
-      - check
-      - update
-      - security
-      - critical
-      - rollup
+  - name: Check for pending reboot (registry)
+    ansible.windows.win_reg_stat:
+      path: HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired
+    register: reboot_registry
+    tags:
+    - reboot-check
+    - reboot
 
-    - name: Update All Categories
-      win_updates:
-        category_names: '*'
-        reboot: true
-        reboot_timeout: 300
-      register: update_results
-      tags:
-      - update
+  - name: Reboot required?
+    debug:
+      msg: "Reboot Required"
+    when: reboot_registry.exists
+    tags:
+    - reboot-check
+    - reboot
 
-    - name: Windows Update Results
-      debug:
-        var: update_results
-      tags:
-      - update
+  # ── Upgrade (all categories) ──────────────────────────────────────────────
 
-    - name: Security Updates
-      win_updates:
-        category_names:
-        - SecurityUpdates
-        reboot: true
-        reboot_timeout: 300
-      register: security_updates
-      tags:
-      - security
+  - name: Install all updates
+    ansible.windows.win_updates:
+      category_names: '*'
+      state: installed
+      reboot: yes
+      reboot_timeout: 600
+    become: yes
+    become_method: runas
+    become_user: SYSTEM
+    register: upgrade_results
+    tags:
+    - upgrade
 
-    - name: Security Update Results
-      debug:
-        var: security_updates
-      tags:
-      - security
+  - name: Show upgrade results
+    debug:
+      msg: "Installed {{ upgrade_results.installed_update_count }} update(s). Reboot required: {{ upgrade_results.reboot_required }}"
+    tags:
+    - upgrade
 
-    - name: Critical Updates
-      win_updates:
-        category_names:
-        - CriticalUpdates
-        reboot: true
-        reboot_timeout: 300
-      register: critical_updates
-      tags:
-      - critical
+  # ── Security updates ──────────────────────────────────────────────────────
 
-    - name: Critical Update Results
-      debug:
-        var: critical_updates
-      tags:
-      - critical
+  - name: Install security updates
+    ansible.windows.win_updates:
+      category_names:
+      - SecurityUpdates
+      state: installed
+      reboot: yes
+      reboot_timeout: 600
+    become: yes
+    become_method: runas
+    become_user: SYSTEM
+    register: security_results
+    tags:
+    - security
 
-    - name: Rollups Updates
-      win_updates:
-        category_names:
-        - UpdateRollups
-        reboot: true
-        reboot_timeout: 300
-      register: rollup_updates
-      tags:
-      - rollup
+  - name: Show security update results
+    debug:
+      msg: "Installed {{ security_results.installed_update_count }} security update(s). Reboot required: {{ security_results.reboot_required }}"
+    tags:
+    - security
 
-    - name: Rollup Update Results
-      debug:
-        var: rollup_updates
-      tags:
-      - rollup
+  # ── Critical updates ──────────────────────────────────────────────────────
+
+  - name: Install critical updates
+    ansible.windows.win_updates:
+      category_names:
+      - CriticalUpdates
+      state: installed
+      reboot: yes
+      reboot_timeout: 600
+    become: yes
+    become_method: runas
+    become_user: SYSTEM
+    register: critical_results
+    tags:
+    - critical
+
+  - name: Show critical update results
+    debug:
+      msg: "Installed {{ critical_results.installed_update_count }} critical update(s). Reboot required: {{ critical_results.reboot_required }}"
+    tags:
+    - critical
+
+  # ── Update rollups ────────────────────────────────────────────────────────
+
+  - name: Install update rollups
+    ansible.windows.win_updates:
+      category_names:
+      - UpdateRollups
+      state: installed
+      reboot: yes
+      reboot_timeout: 600
+    become: yes
+    become_method: runas
+    become_user: SYSTEM
+    register: rollup_results
+    tags:
+    - rollup
+
+  - name: Show rollup results
+    debug:
+      msg: "Installed {{ rollup_results.installed_update_count }} rollup(s). Reboot required: {{ rollup_results.reboot_required }}"
+    tags:
+    - rollup
+
+  # ── Reboot ────────────────────────────────────────────────────────────────
+
+  - name: Reboot if pending
+    ansible.windows.win_reboot:
+      reboot_timeout: 600
+    when: reboot_registry.exists
+    tags:
+    - reboot

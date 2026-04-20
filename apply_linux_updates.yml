@@ -60,42 +60,32 @@
       - ansible_distribution == "Ubuntu"
 
     - name: Gather Upgradable Packages on YUM
-      shell: yum list updates
+      ansible.builtin.shell: yum list updates
       register: result
-      when:
-        - ansible_distribution == "CentOS"
-        - ansible_distribution == "AlmaLinux"
+      when: ansible_distribution in ["CentOS", "AlmaLinux"]
       tags:
       - install
       - check
 
     - name: Show YUM Output
       debug: msg="{{ result.stdout }}"
+      when: ansible_distribution in ["CentOS", "AlmaLinux"]
       tags:
       - install
       - check
-      when:
-        - ansible_distribution == "CentOS"
-        - ansible_distribution == "AlmaLinux"
 
     - name: YUM Upgrade
       ansible.builtin.yum:
         name: '*'
         state: latest
-      shell: yum update && yum upgrade -y
-      when:
-        - ansible_distribution == "CentOS"
-        - ansible_distribution == "AlmaLinux"
+      when: ansible_distribution in ["CentOS", "AlmaLinux"]
       tags:
       - install
 
     - name: YUM Cleanup
       ansible.builtin.yum:
         autoremove: yes
-      shell: yum clean all
-      when:
-        - ansible_distribution == "CentOS"
-        - ansible_distribution == "AlmaLinux"
+      when: ansible_distribution in ["CentOS", "AlmaLinux"]
       tags:
       - install
 
