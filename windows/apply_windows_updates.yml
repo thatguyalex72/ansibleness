@@ -34,9 +34,6 @@
   - name: Search for available updates
     ansible.windows.win_updates:
       state: searched
-    become: yes
-    become_method: runas
-    become_user: SYSTEM
     register: available_updates
     tags:
     - check
@@ -82,9 +79,6 @@
       state: installed
       reboot: yes
       reboot_timeout: 600
-    become: yes
-    become_method: runas
-    become_user: SYSTEM
     register: upgrade_results
     tags:
     - upgrade
@@ -104,9 +98,6 @@
       state: installed
       reboot: yes
       reboot_timeout: 600
-    become: yes
-    become_method: runas
-    become_user: SYSTEM
     register: security_results
     tags:
     - security
@@ -126,9 +117,6 @@
       state: installed
       reboot: yes
       reboot_timeout: 600
-    become: yes
-    become_method: runas
-    become_user: SYSTEM
     register: critical_results
     tags:
     - critical
@@ -148,9 +136,6 @@
       state: installed
       reboot: yes
       reboot_timeout: 600
-    become: yes
-    become_method: runas
-    become_user: SYSTEM
     register: rollup_results
     tags:
     - rollup

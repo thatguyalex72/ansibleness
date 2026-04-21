@@ -84,13 +84,15 @@
 
   - name: Update package cache (DNF/YUM)
     shell: "{{ ansible_facts['pkg_mgr'] }} makecache"
-    become: yes
     when: ansible_facts['pkg_mgr'] in ['dnf', 'yum']
     tags:
     - update
+    - check
+    - quick
+    - list
 
   - name: List available updates (DNF/YUM)
-    shell: "{{ ansible_facts['pkg_mgr'] }} check-update"
+    shell: "{{ ansible_facts['pkg_mgr'] }} check-update --cacheonly"
     register: rhel_update_results
     failed_when: rhel_update_results.rc not in [0, 100]
     when: ansible_facts['pkg_mgr'] in ['dnf', 'yum']
