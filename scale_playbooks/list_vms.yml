@@ -1,0 +1,371 @@
+---
+# Lists all VMs across demolab HyperCore clusters.
+#
+# USAGE (from scale_playbooks/):
+#   All clusters:      ansible-playbook list_vms.yml
+#   Single cluster:    ansible-playbook list_vms.yml --tags otava
+#   All demolab:       ansible-playbook list_vms.yml --tags demolab
+#   Only powered on:   ansible-playbook list_vms.yml -e power_filter=started
+#   Only powered off:  ansible-playbook list_vms.yml -e power_filter=stopped
+#
+# CLUSTER TAGS: otava, maverick, goose, 3350f, demolab
+
+# =============================================================================
+- name: List VMs - US-Otava
+  hosts: US_Otava_node1
+  connection: local
+  gather_facts: false
+  tags: [otava, demolab]
+  environment:
+    SC_HOST: "https://10.8.12.10"
+    SC_USERNAME: "{{ sc_username }}"
+    SC_PASSWORD: "{{ sc_password }}"
+  tasks:
+    - name: Get VM info
+      scale_computing.hypercore.vm_info:
+      register: all_vms
+
+    - name: Apply power state filter
+      ansible.builtin.set_fact:
+        vms_to_show: >-
+          {{ all_vms.records | selectattr('power_state', 'equalto', power_filter) | list
+             if power_filter is defined else all_vms.records }}
+
+    - name: "US-Otava | {{ all_vms.records | selectattr('power_state', 'equalto', 'started') | list | length }} on / {{ all_vms.records | selectattr('power_state', 'equalto', 'stopped') | list | length }} off | {{ vms_to_show | length }} shown"
+      ansible.builtin.debug:
+        msg: "{{ item.vm_name }} | {{ item.power_state }} | {{ item.vcpu }} vCPU | {{ (item.memory / 1073741824) | round(1) }} GB RAM | {{ ((item.disks | rejectattr('type', 'equalto', 'ide_cdrom') | map(attribute='size') | sum) / 1073741824) | round(1) ~ ' GB disk' if item.disks | rejectattr('type', 'equalto', 'ide_cdrom') | list | length > 0 else 'no disk' }}"
+      loop: "{{ vms_to_show }}"
+      loop_control:
+        label: "{{ item.vm_name }}"
+      when: vms_to_show | length > 0
+
+    - name: No VMs match filter
+      ansible.builtin.debug:
+        msg: "No VMs in state '{{ power_filter | default('') }}' on US-Otava."
+      when:
+        - power_filter is defined
+        - vms_to_show | length == 0
+
+# =============================================================================
+- name: List VMs - US-Maverick
+  hosts: US_Maverick_node1
+  connection: local
+  gather_facts: false
+  tags: [maverick, demolab]
+  environment:
+    SC_HOST: "https://10.8.12.13"
+    SC_USERNAME: "{{ sc_username }}"
+    SC_PASSWORD: "{{ sc_password }}"
+  tasks:
+    - name: Get VM info
+      scale_computing.hypercore.vm_info:
+      register: all_vms
+
+    - name: Apply power state filter
+      ansible.builtin.set_fact:
+        vms_to_show: >-
+          {{ all_vms.records | selectattr('power_state', 'equalto', power_filter) | list
+             if power_filter is defined else all_vms.records }}
+
+    - name: "US-Maverick | {{ all_vms.records | selectattr('power_state', 'equalto', 'started') | list | length }} on / {{ all_vms.records | selectattr('power_state', 'equalto', 'stopped') | list | length }} off | {{ vms_to_show | length }} shown"
+      ansible.builtin.debug:
+        msg: "{{ item.vm_name }} | {{ item.power_state }} | {{ item.vcpu }} vCPU | {{ (item.memory / 1073741824) | round(1) }} GB RAM | {{ ((item.disks | rejectattr('type', 'equalto', 'ide_cdrom') | map(attribute='size') | sum) / 1073741824) | round(1) ~ ' GB disk' if item.disks | rejectattr('type', 'equalto', 'ide_cdrom') | list | length > 0 else 'no disk' }}"
+      loop: "{{ vms_to_show }}"
+      loop_control:
+        label: "{{ item.vm_name }}"
+      when: vms_to_show | length > 0
+
+    - name: No VMs match filter
+      ansible.builtin.debug:
+        msg: "No VMs in state '{{ power_filter | default('') }}' on US-Maverick."
+      when:
+        - power_filter is defined
+        - vms_to_show | length == 0
+
+# =============================================================================
+- name: List VMs - US-Goose
+  hosts: US_Goose
+  connection: local
+  gather_facts: false
+  tags: [goose, demolab]
+  environment:
+    SC_HOST: "https://10.8.12.16"
+    SC_USERNAME: "{{ sc_username }}"
+    SC_PASSWORD: "{{ sc_password }}"
+  tasks:
+    - name: Get VM info
+      scale_computing.hypercore.vm_info:
+      register: all_vms
+
+    - name: Apply power state filter
+      ansible.builtin.set_fact:
+        vms_to_show: >-
+          {{ all_vms.records | selectattr('power_state', 'equalto', power_filter) | list
+             if power_filter is defined else all_vms.records }}
+
+    - name: "US-Goose | {{ all_vms.records | selectattr('power_state', 'equalto', 'started') | list | length }} on / {{ all_vms.records | selectattr('power_state', 'equalto', 'stopped') | list | length }} off | {{ vms_to_show | length }} shown"
+      ansible.builtin.debug:
+        msg: "{{ item.vm_name }} | {{ item.power_state }} | {{ item.vcpu }} vCPU | {{ (item.memory / 1073741824) | round(1) }} GB RAM | {{ ((item.disks | rejectattr('type', 'equalto', 'ide_cdrom') | map(attribute='size') | sum) / 1073741824) | round(1) ~ ' GB disk' if item.disks | rejectattr('type', 'equalto', 'ide_cdrom') | list | length > 0 else 'no disk' }}"
+      loop: "{{ vms_to_show }}"
+      loop_control:
+        label: "{{ item.vm_name }}"
+      when: vms_to_show | length > 0
+
+    - name: No VMs match filter
+      ansible.builtin.debug:
+        msg: "No VMs in state '{{ power_filter | default('') }}' on US-Goose."
+      when:
+        - power_filter is defined
+        - vms_to_show | length == 0
+
+# =============================================================================
+- name: List VMs - US-3350F
+  hosts: US_3350F_node1
+  connection: local
+  gather_facts: false
+  tags: [3350f, demolab]
+  environment:
+    SC_HOST: "https://10.8.12.17"
+    SC_USERNAME: "{{ sc_username }}"
+    SC_PASSWORD: "{{ sc_password }}"
+  tasks:
+    - name: Get VM info
+      scale_computing.hypercore.vm_info:
+      register: all_vms
+
+    - name: Apply power state filter
+      ansible.builtin.set_fact:
+        vms_to_show: >-
+          {{ all_vms.records | selectattr('power_state', 'equalto', power_filter) | list
+             if power_filter is defined else all_vms.records }}
+
+    - name: "US-3350F | {{ all_vms.records | selectattr('power_state', 'equalto', 'started') | list | length }} on / {{ all_vms.records | selectattr('power_state', 'equalto', 'stopped') | list | length }} off | {{ vms_to_show | length }} shown"
+      ansible.builtin.debug:
+        msg: "{{ item.vm_name }} | {{ item.power_state }} | {{ item.vcpu }} vCPU | {{ (item.memory / 1073741824) | round(1) }} GB RAM | {{ ((item.disks | rejectattr('type', 'equalto', 'ide_cdrom') | map(attribute='size') | sum) / 1073741824) | round(1) ~ ' GB disk' if item.disks | rejectattr('type', 'equalto', 'ide_cdrom') | list | length > 0 else 'no disk' }}"
+      loop: "{{ vms_to_show }}"
+      loop_control:
+        label: "{{ item.vm_name }}"
+      when: vms_to_show | length > 0
+
+    - name: No VMs match filter
+      ansible.builtin.debug:
+        msg: "No VMs in state '{{ power_filter | default('') }}' on US-3350F."
+      when:
+        - power_filter is defined
+        - vms_to_show | length == 0
+
+# =============================================================================
+- name: List VMs - PUB1
+  hosts: PUB1_node1
+  connection: local
+  gather_facts: false
+  tags: [pub1, publab]
+  environment:
+    SC_HOST: "https://10.5.11.80"
+    SC_USERNAME: "{{ sc_username }}"
+    SC_PASSWORD: "{{ sc_password }}"
+  tasks:
+    - name: Get VM info
+      scale_computing.hypercore.vm_info:
+      register: all_vms
+
+    - name: Apply power state filter
+      ansible.builtin.set_fact:
+        vms_to_show: >-
+          {{ all_vms.records | selectattr('power_state', 'equalto', power_filter) | list
+             if power_filter is defined else all_vms.records }}
+
+    - name: "PUB1 | {{ all_vms.records | selectattr('power_state', 'equalto', 'started') | list | length }} on / {{ all_vms.records | selectattr('power_state', 'equalto', 'stopped') | list | length }} off | {{ vms_to_show | length }} shown"
+      ansible.builtin.debug:
+        msg: "{{ item.vm_name }} | {{ item.power_state }} | {{ item.vcpu }} vCPU | {{ (item.memory / 1073741824) | round(1) }} GB RAM | {{ ((item.disks | rejectattr('type', 'equalto', 'ide_cdrom') | map(attribute='size') | sum) / 1073741824) | round(1) ~ ' GB disk' if item.disks | rejectattr('type', 'equalto', 'ide_cdrom') | list | length > 0 else 'no disk' }}"
+      loop: "{{ vms_to_show }}"
+      loop_control:
+        label: "{{ item.vm_name }}"
+      when: vms_to_show | length > 0
+
+    - name: No VMs match filter
+      ansible.builtin.debug:
+        msg: "No VMs in state '{{ power_filter | default('') }}' on PUB1."
+      when:
+        - power_filter is defined
+        - vms_to_show | length == 0
+
+# =============================================================================
+- name: List VMs - PUB2
+  hosts: PUB2_node1
+  connection: local
+  gather_facts: false
+  tags: [pub2, publab]
+  environment:
+    SC_HOST: "https://10.5.11.110"
+    SC_USERNAME: "{{ sc_username }}"
+    SC_PASSWORD: "{{ sc_password }}"
+  tasks:
+    - name: Get VM info
+      scale_computing.hypercore.vm_info:
+      register: all_vms
+
+    - name: Apply power state filter
+      ansible.builtin.set_fact:
+        vms_to_show: >-
+          {{ all_vms.records | selectattr('power_state', 'equalto', power_filter) | list
+             if power_filter is defined else all_vms.records }}
+
+    - name: "PUB2 | {{ all_vms.records | selectattr('power_state', 'equalto', 'started') | list | length }} on / {{ all_vms.records | selectattr('power_state', 'equalto', 'stopped') | list | length }} off | {{ vms_to_show | length }} shown"
+      ansible.builtin.debug:
+        msg: "{{ item.vm_name }} | {{ item.power_state }} | {{ item.vcpu }} vCPU | {{ (item.memory / 1073741824) | round(1) }} GB RAM | {{ ((item.disks | rejectattr('type', 'equalto', 'ide_cdrom') | map(attribute='size') | sum) / 1073741824) | round(1) ~ ' GB disk' if item.disks | rejectattr('type', 'equalto', 'ide_cdrom') | list | length > 0 else 'no disk' }}"
+      loop: "{{ vms_to_show }}"
+      loop_control:
+        label: "{{ item.vm_name }}"
+      when: vms_to_show | length > 0
+
+    - name: No VMs match filter
+      ansible.builtin.debug:
+        msg: "No VMs in state '{{ power_filter | default('') }}' on PUB2."
+      when:
+        - power_filter is defined
+        - vms_to_show | length == 0
+
+# =============================================================================
+- name: List VMs - PUB5
+  hosts: PUB5_node1
+  connection: local
+  gather_facts: false
+  tags: [pub5, publab]
+  environment:
+    SC_HOST: "https://10.5.11.50"
+    SC_USERNAME: "{{ sc_username }}"
+    SC_PASSWORD: "{{ sc_password }}"
+  tasks:
+    - name: Get VM info
+      scale_computing.hypercore.vm_info:
+      register: all_vms
+
+    - name: Apply power state filter
+      ansible.builtin.set_fact:
+        vms_to_show: >-
+          {{ all_vms.records | selectattr('power_state', 'equalto', power_filter) | list
+             if power_filter is defined else all_vms.records }}
+
+    - name: "PUB5 | {{ all_vms.records | selectattr('power_state', 'equalto', 'started') | list | length }} on / {{ all_vms.records | selectattr('power_state', 'equalto', 'stopped') | list | length }} off | {{ vms_to_show | length }} shown"
+      ansible.builtin.debug:
+        msg: "{{ item.vm_name }} | {{ item.power_state }} | {{ item.vcpu }} vCPU | {{ (item.memory / 1073741824) | round(1) }} GB RAM | {{ ((item.disks | rejectattr('type', 'equalto', 'ide_cdrom') | map(attribute='size') | sum) / 1073741824) | round(1) ~ ' GB disk' if item.disks | rejectattr('type', 'equalto', 'ide_cdrom') | list | length > 0 else 'no disk' }}"
+      loop: "{{ vms_to_show }}"
+      loop_control:
+        label: "{{ item.vm_name }}"
+      when: vms_to_show | length > 0
+
+    - name: No VMs match filter
+      ansible.builtin.debug:
+        msg: "No VMs in state '{{ power_filter | default('') }}' on PUB5."
+      when:
+        - power_filter is defined
+        - vms_to_show | length == 0
+
+# =============================================================================
+- name: List VMs - PUB6
+  hosts: PUB6
+  connection: local
+  gather_facts: false
+  tags: [pub6, publab]
+  environment:
+    SC_HOST: "https://10.5.11.60"
+    SC_USERNAME: "{{ sc_username }}"
+    SC_PASSWORD: "{{ sc_password }}"
+  tasks:
+    - name: Get VM info
+      scale_computing.hypercore.vm_info:
+      register: all_vms
+
+    - name: Apply power state filter
+      ansible.builtin.set_fact:
+        vms_to_show: >-
+          {{ all_vms.records | selectattr('power_state', 'equalto', power_filter) | list
+             if power_filter is defined else all_vms.records }}
+
+    - name: "PUB6 | {{ all_vms.records | selectattr('power_state', 'equalto', 'started') | list | length }} on / {{ all_vms.records | selectattr('power_state', 'equalto', 'stopped') | list | length }} off | {{ vms_to_show | length }} shown"
+      ansible.builtin.debug:
+        msg: "{{ item.vm_name }} | {{ item.power_state }} | {{ item.vcpu }} vCPU | {{ (item.memory / 1073741824) | round(1) }} GB RAM | {{ ((item.disks | rejectattr('type', 'equalto', 'ide_cdrom') | map(attribute='size') | sum) / 1073741824) | round(1) ~ ' GB disk' if item.disks | rejectattr('type', 'equalto', 'ide_cdrom') | list | length > 0 else 'no disk' }}"
+      loop: "{{ vms_to_show }}"
+      loop_control:
+        label: "{{ item.vm_name }}"
+      when: vms_to_show | length > 0
+
+    - name: No VMs match filter
+      ansible.builtin.debug:
+        msg: "No VMs in state '{{ power_filter | default('') }}' on PUB6."
+      when:
+        - power_filter is defined
+        - vms_to_show | length == 0
+
+# =============================================================================
+- name: List VMs - PUB9
+  hosts: PUB9_node1
+  connection: local
+  gather_facts: false
+  tags: [pub9, publab]
+  environment:
+    SC_HOST: "https://10.5.11.90"
+    SC_USERNAME: "{{ sc_username }}"
+    SC_PASSWORD: "{{ sc_password }}"
+  tasks:
+    - name: Get VM info
+      scale_computing.hypercore.vm_info:
+      register: all_vms
+
+    - name: Apply power state filter
+      ansible.builtin.set_fact:
+        vms_to_show: >-
+          {{ all_vms.records | selectattr('power_state', 'equalto', power_filter) | list
+             if power_filter is defined else all_vms.records }}
+
+    - name: "PUB9 | {{ all_vms.records | selectattr('power_state', 'equalto', 'started') | list | length }} on / {{ all_vms.records | selectattr('power_state', 'equalto', 'stopped') | list | length }} off | {{ vms_to_show | length }} shown"
+      ansible.builtin.debug:
+        msg: "{{ item.vm_name }} | {{ item.power_state }} | {{ item.vcpu }} vCPU | {{ (item.memory / 1073741824) | round(1) }} GB RAM | {{ ((item.disks | rejectattr('type', 'equalto', 'ide_cdrom') | map(attribute='size') | sum) / 1073741824) | round(1) ~ ' GB disk' if item.disks | rejectattr('type', 'equalto', 'ide_cdrom') | list | length > 0 else 'no disk' }}"
+      loop: "{{ vms_to_show }}"
+      loop_control:
+        label: "{{ item.vm_name }}"
+      when: vms_to_show | length > 0
+
+    - name: No VMs match filter
+      ansible.builtin.debug:
+        msg: "No VMs in state '{{ power_filter | default('') }}' on PUB9."
+      when:
+        - power_filter is defined
+        - vms_to_show | length == 0
+
+# =============================================================================
+- name: List VMs - PUB10
+  hosts: PUB10_node1
+  connection: local
+  gather_facts: false
+  tags: [pub10, publab]
+  environment:
+    SC_HOST: "https://10.5.11.100"
+    SC_USERNAME: "{{ sc_username }}"
+    SC_PASSWORD: "{{ sc_password }}"
+  tasks:
+    - name: Get VM info
+      scale_computing.hypercore.vm_info:
+      register: all_vms
+
+    - name: Apply power state filter
+      ansible.builtin.set_fact:
+        vms_to_show: >-
+          {{ all_vms.records | selectattr('power_state', 'equalto', power_filter) | list
+             if power_filter is defined else all_vms.records }}
+
+    - name: "PUB10 | {{ all_vms.records | selectattr('power_state', 'equalto', 'started') | list | length }} on / {{ all_vms.records | selectattr('power_state', 'equalto', 'stopped') | list | length }} off | {{ vms_to_show | length }} shown"
+      ansible.builtin.debug:
+        msg: "{{ item.vm_name }} | {{ item.power_state }} | {{ item.vcpu }} vCPU | {{ (item.memory / 1073741824) | round(1) }} GB RAM | {{ ((item.disks | rejectattr('type', 'equalto', 'ide_cdrom') | map(attribute='size') | sum) / 1073741824) | round(1) ~ ' GB disk' if item.disks | rejectattr('type', 'equalto', 'ide_cdrom') | list | length > 0 else 'no disk' }}"
+      loop: "{{ vms_to_show }}"
+      loop_control:
+        label: "{{ item.vm_name }}"
+      when: vms_to_show | length > 0
+
+    - name: No VMs match filter
+      ansible.builtin.debug:
+        msg: "No VMs in state '{{ power_filter | default('') }}' on PUB10."
+      when:
+        - power_filter is defined
+        - vms_to_show | length == 0

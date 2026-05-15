@@ -12,8 +12,8 @@
 
   environment:
     SC_HOST: "https://10.8.12.10"
-    SC_USERNAME: "{{ lookup('env', 'SC_USERNAME') }}"
-    SC_PASSWORD: "{{ lookup('env', 'SC_PASSWORD') }}"
+    SC_USERNAME: "{{ sc_username }}"
+    SC_PASSWORD: "{{ sc_password }}"
 
   tasks:
     - name: Power off demo VMs

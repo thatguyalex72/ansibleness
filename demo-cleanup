@@ -1,4 +1,3 @@
 #!/bin/bash
 cd "$(dirname "$0")/scale_playbooks"
-source ~/.scale_env
 ansible-playbook cleanup_demo_vms.yml "$@"
