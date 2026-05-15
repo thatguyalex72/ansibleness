@@ -1,18 +1,61 @@
 ---
-  - name: Get Cluster Info
-    hosts: otava 
-    connection: local
-    gather_facts: false
-    environment:
+# Discovery playbook — dumps raw API responses from the Node and Cluster
+# endpoints. Used to inspect available fields for metrics playbooks.
+#
+# USAGE:
+#   ansible-playbook get_cluster_info.yml --tags otava
 
-    tasks:
-    - name: Get Cluster Info
-      scale_computing.hypercore.api:
-        endpoint:/rest/v1/Cluster/e75ff703-d1ad-41e1-8dd3-676bbbfd2bac
-        action: GET 
-      register: info
+- name: Get Cluster Info - US-Otava
+  hosts: US_Otava_node1
+  connection: local
+  gather_facts: false
+  tags: [otava, demolab]
+  environment:
+    SC_HOST: "https://10.8.12.10"
+    SC_USERNAME: "{{ sc_username }}"
+    SC_PASSWORD: "{{ sc_password }}"
+  tasks:
+    - name: Get node info
+      scale_computing.hypercore.node_info:
+      register: node_info
 
-    - name: Display Info
-      debug:
-#        var: info.json.value
-        var: info
+    - name: Node info
+      ansible.builtin.debug:
+        msg: "lan_ip: {{ item.lan_ip }} | backplane_ip: {{ item.backplane_ip }} | {{ item | dict2items | rejectattr('key', 'in', ['lan_ip', 'backplane_ip']) | items2dict }}"
+      loop: "{{ node_info.records }}"
+      loop_control:
+        label: "{{ item.lan_ip | default(item.node_uuid) }}"
+
+    - name: Get cluster info
+      scale_computing.hypercore.cluster_info:
+      register: cluster_info
+
+    - name: Raw cluster response
+      ansible.builtin.debug:
+        var: cluster_info
+
+    - name: Get raw Node data via REST API
+      ansible.builtin.uri:
+        url: "https://10.8.12.10/rest/v1/Node"
+        url_username: "{{ sc_username }}"
+        url_password: "{{ sc_password }}"
+        validate_certs: false
+        force_basic_auth: true
+      register: raw_nodes
+
+    - name: Raw REST node response
+      ansible.builtin.debug:
+        var: raw_nodes.json
+
+    - name: Get raw Cluster data via REST API
+      ansible.builtin.uri:
+        url: "https://10.8.12.10/rest/v1/Cluster"
+        url_username: "{{ sc_username }}"
+        url_password: "{{ sc_password }}"
+        validate_certs: false
+        force_basic_auth: true
+      register: raw_cluster
+
+    - name: Raw REST cluster response
+      ansible.builtin.debug:
+        var: raw_cluster.json
