@@ -1,0 +1,50 @@
+---
+# Shuts down and deletes demo VMs on US-Otava after a demo session.
+#
+# USAGE:
+#   source ~/.scale_env && ansible-playbook -i scale_playbooks/inventory_with_clusters \
+#     scale_playbooks/cleanup_demo_vms.yml
+
+- name: Shutdown and delete demo VMs from US-Otava
+  hosts: US_Otava_node1
+  connection: local
+  gather_facts: false
+
+  environment:
+    SC_HOST: "https://10.8.12.10"
+    SC_USERNAME: "{{ lookup('env', 'SC_USERNAME') }}"
+    SC_PASSWORD: "{{ lookup('env', 'SC_PASSWORD') }}"
+
+  tasks:
+    - name: Power off demo VMs
+      scale_computing.hypercore.vm_params:
+        vm_name: "{{ item }}"
+        power_state: stop
+      loop:
+        - DC02
+        - DC03
+        - USP-S-FINANCE-clone
+      ignore_errors: true
+
+    - name: Wait for power-off to settle
+      ansible.builtin.pause:
+        seconds: 5
+
+    - name: Delete demo VMs
+      scale_computing.hypercore.vm:
+        vm_name: "{{ item }}"
+        state: absent
+      loop:
+        - DC02
+        - DC03
+        - USP-S-FINANCE-clone
+      ignore_errors: true
+      register: delete_result
+
+    - name: Cleanup summary
+      ansible.builtin.debug:
+        msg: |
+          Cleanup complete on US-Otava:
+          - DC02: {{ 'deleted' if not delete_result.results[0].failed else 'not found / skipped' }}
+          - DC03: {{ 'deleted' if not delete_result.results[1].failed else 'not found / skipped' }}
+          - USP-S-FINANCE-clone: {{ 'deleted' if not delete_result.results[2].failed else 'not found / skipped' }}
