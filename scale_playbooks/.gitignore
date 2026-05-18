@@ -1,0 +1,5 @@
+# Google service account key - never commit
+.gcp/
+
+# Generated file containing plaintext credentials
+users.yml

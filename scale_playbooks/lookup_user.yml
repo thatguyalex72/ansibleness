@@ -1,0 +1,34 @@
+---
+# Looks up a specific user on PUB1 by username.
+#
+# USAGE (from scale_playbooks/):
+#   ansible-playbook lookup_user.yml -e username=atest
+
+- name: Lookup User - PUB1
+  hosts: PUB1_node1
+  connection: local
+  gather_facts: false
+  environment:
+    SC_HOST: "https://10.5.11.80"
+    SC_USERNAME: "{{ sc_username }}"
+    SC_PASSWORD: "{{ sc_password }}"
+  tasks:
+    - name: Get user info
+      scale_computing.hypercore.user_info:
+        username: "{{ username }}"
+      register: user_info
+
+    - name: User not found
+      ansible.builtin.debug:
+        msg: "No user found with username '{{ username }}'"
+      when: user_info.records | length == 0
+
+    - name: User details
+      ansible.builtin.debug:
+        msg: |
+          username:   {{ item.username }}
+          full_name:  {{ item.full_name }}
+          uuid:       {{ item.uuid }}
+          roles:      {{ item.roles | map(attribute='name') | list }}
+      loop: "{{ user_info.records }}"
+      when: user_info.records | length > 0

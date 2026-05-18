@@ -1,0 +1,28 @@
+---
+# Lists all roles and their names on PUB1.
+# Run this to verify role names before running create_users.yml.
+#
+# USAGE (from scale_playbooks/):
+#   ansible-playbook discover_roles.yml
+
+- name: Discover Roles - PUB1
+  hosts: PUB1_node1
+  connection: local
+  gather_facts: false
+  environment:
+    SC_HOST: "https://10.5.11.80"
+    SC_USERNAME: "{{ sc_username }}"
+    SC_PASSWORD: "{{ sc_password }}"
+  tasks:
+    - name: Get all roles
+      scale_computing.hypercore.api:
+        action: get
+        endpoint: /rest/v1/Role
+      register: role_data
+
+    - name: Role list
+      ansible.builtin.debug:
+        msg: "{{ item.name }} | {{ item.uuid }}"
+      loop: "{{ role_data.record }}"
+      loop_control:
+        label: "{{ item.name }}"

@@ -1,0 +1,102 @@
+---
+# Creates users on PUB1 (3250DFz) HyperCore cluster from Google Sheet data.
+# Skips rows already italicized in the sheet (already created).
+# After all clusters finish, marks newly created rows italic automatically.
+#
+# USAGE (from scale_playbooks/):
+#   Full run:         ansible-playbook create_users.yml
+#   Preview only:     ansible-playbook create_users.yml --tags check
+#
+# PREREQUISITES:
+#   1. Set GSHEET_SERVICE_ACCOUNT_FILE and GSHEET_SPREADSHEET_ID env vars.
+#   2. pip install google-api-python-client google-auth pyyaml
+#   3. Service account must have Editor access to the Google Sheet.
+
+# =============================================================================
+- name: Fetch users from Google Sheet
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tags: always
+  tasks:
+    - name: Fetch non-italic users from Google Sheet
+      ansible.builtin.command:
+        cmd: /opt/homebrew/Cellar/ansible/13.6.0_1/libexec/bin/python fetch_sheet_users.py --mode fetch
+        chdir: "{{ playbook_dir }}"
+      changed_when: true
+
+# =============================================================================
+- name: Check - Preview pending users
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tags: always
+  tasks:
+    - name: Load users
+      ansible.builtin.include_vars: users.yml
+
+    - name: No new users found
+      ansible.builtin.debug:
+        msg: "No new users to create — all sheet rows are already marked done."
+      when: users | length == 0
+
+    - name: "{{ users | length }} user(s) pending creation"
+      ansible.builtin.debug:
+        msg: "{{ item.username }} | {{ item.full_name }}"
+      loop: "{{ users }}"
+      loop_control:
+        label: "{{ item.username }}"
+      when: users | length > 0
+
+# =============================================================================
+- name: Create Users - PUB1
+  hosts: PUB1_node1
+  connection: local
+  gather_facts: false
+  tags: create
+  environment:
+    SC_HOST: "https://10.5.11.80"
+    SC_USERNAME: "{{ sc_username }}"
+    SC_PASSWORD: "{{ sc_password }}"
+  tasks:
+    - name: Load users
+      ansible.builtin.include_vars: users.yml
+
+    - name: Create user accounts
+      scale_computing.hypercore.user:
+        username: "{{ item.username }}"
+        password: "{{ item.password }}"
+        full_name: "{{ item.full_name }}"
+        roles:
+          - "Read"
+          - "Backup"
+          - "VM Create/Edit"
+          - "VM Delete"
+          - "VM Power Controls"
+        state: present
+      loop: "{{ users }}"
+      loop_control:
+        label: "{{ item.username }}"
+      register: user_results
+      when: users | length > 0
+
+    - name: "PUB1 | {{ user_results.results | selectattr('changed') | list | length }} created / {{ user_results.results | rejectattr('changed') | list | length }} already existed"
+      ansible.builtin.debug:
+        msg: "{{ item.item.username }}: {{ 'created' if item.changed else 'already exists' }}"
+      loop: "{{ user_results.results }}"
+      loop_control:
+        label: "{{ item.item.username }}"
+      when: users | length > 0
+
+# =============================================================================
+- name: Mark new users as done in Google Sheet
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tags: create
+  tasks:
+    - name: Mark created rows as italic in sheet
+      ansible.builtin.command:
+        cmd: /opt/homebrew/Cellar/ansible/13.6.0_1/libexec/bin/python fetch_sheet_users.py --mode mark-done
+        chdir: "{{ playbook_dir }}"
+      changed_when: true
