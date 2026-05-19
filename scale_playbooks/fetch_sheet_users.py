@@ -71,6 +71,7 @@ PASSWORD_COL  = "Password"
 EMAIL_COL     = "Email (alex@acme_it.com)"
 VMTAG_COL     = "Templates/Tags"
 COMPANY_COL   = "Company/Partner Name (Acme IT)"
+CC_COL        = "SC//Sales Team Affiliation"
 
 OUTPUT_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "users.yml")
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
@@ -152,6 +153,15 @@ def generate_password(company_name):
     return f"{clean_word}##Scale2026"
 
 
+def generate_vmtag(company_name):
+    words = company_name.strip().split()
+    if not words:
+        return ""
+    if len(words) == 1:
+        return re.sub(r"[^a-zA-Z0-9]", "", words[0])
+    return "".join(re.sub(r"[^a-zA-Z0-9]", "", w)[0] for w in words if re.sub(r"[^a-zA-Z0-9]", "", w))
+
+
 def get_cluster_usernames():
     """Returns set of usernames already on any publab cluster."""
     if not SC_USERNAME or not SC_PASSWORD:
@@ -204,6 +214,7 @@ def fetch_users(service):
         email_idx     = headers.index(EMAIL_COL)
         vmtag_idx     = headers.index(VMTAG_COL)
         company_idx   = headers.index(COMPANY_COL)
+        cc_idx        = headers.index(CC_COL)
     except ValueError as e:
         print(f"ERROR: Column not found: {e}", file=sys.stderr)
         print(f"Available columns: {headers}", file=sys.stderr)
@@ -266,6 +277,7 @@ def fetch_users(service):
         email     = get_col(email_idx)
         vmtag     = get_col(vmtag_idx)
         company   = get_col(company_idx)
+        cc        = get_col(cc_idx)
 
         # Auto-generate username if missing
         if not username:
@@ -287,6 +299,14 @@ def fetch_users(service):
             writeback_updates.append({
                 "range": f"{sheet_name}!{chr(65 + password_idx)}{i + 1}",
                 "values": [[password]],
+            })
+
+        # Auto-generate vmtag if missing
+        if not vmtag and company:
+            vmtag = generate_vmtag(company)
+            writeback_updates.append({
+                "range": f"{sheet_name}!{chr(65 + vmtag_idx)}{i + 1}",
+                "values": [[vmtag]],
             })
 
         # Conflict check
@@ -315,6 +335,7 @@ def fetch_users(service):
             "full_name": full_name,
             "password":  password,
             "email":     email,
+            "cc":        cc,
             "vmtag":     vmtag,
             "sheet_row": i + 1,
         })
@@ -371,8 +392,8 @@ def send_emails():
 
         for user in users:
             to_email = user.get("email", "").strip()
-            if not to_email:
-                print(f"  skipping {user['username']} — no email address in sheet")
+            if not to_email or "@" not in to_email:
+                print(f"  skipping {user['username']} — missing or invalid email in sheet: '{to_email}'")
                 skipped += 1
                 continue
 
@@ -382,13 +403,19 @@ def send_emails():
                 vmtag=user.get("vmtag", ""),
             )
 
+            cc_email = user.get("cc", "").strip()
+
             msg = MIMEText(body)
             msg["Subject"] = EMAIL_SUBJECT
             msg["From"] = GMAIL_ADDRESS
             msg["To"] = to_email
+            if cc_email and "@" in cc_email:
+                msg["Cc"] = cc_email
 
-            smtp.send_message(msg)
-            print(f"  sent to {user['username']} <{to_email}>")
+            recipients = [to_email] + ([cc_email] if cc_email and "@" in cc_email else [])
+            smtp.sendmail(GMAIL_ADDRESS, recipients, msg.as_string())
+            print(f"  sent to {user['username']} <{to_email}>"
+                  + (f" cc: {cc_email}" if cc_email and "@" in cc_email else ""))
             sent += 1
 
     print(f"Emails sent: {sent}" + (f" ({skipped} skipped — no email in sheet)" if skipped else ""))
