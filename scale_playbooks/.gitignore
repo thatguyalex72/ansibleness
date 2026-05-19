@@ -3,3 +3,6 @@
 
 # Generated file containing plaintext credentials
 users.yml
+
+# Contains customer infrastructure details (hostnames, domains)
+New Store Provision.yml

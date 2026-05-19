@@ -1,4 +1,4 @@
-#!/opt/homebrew/Cellar/ansible/13.6.0_1/libexec/bin/python
+#!/usr/bin/env python3
 """
 Reads the Scale demo lab user request Google Sheet and writes users.yml
 for use by create_users.yml.
