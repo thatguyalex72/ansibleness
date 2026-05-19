@@ -1,16 +1,67 @@
 ---
-# Lists all roles and their names on PUB1.
-# Run this to verify role names before running create_users.yml.
+# Lists all roles and their names across publab clusters.
+# Run this to verify role names match before running create_users.yml.
 #
 # USAGE (from scale_playbooks/):
-#   ansible-playbook discover_roles.yml
+#   All clusters:     ansible-playbook discover_roles.yml
+#   Single cluster:   ansible-playbook discover_roles.yml --tags pub1
 
-- name: Discover Roles - PUB1
+# =============================================================================
+- name: Discover Roles - PUB1 (10.5.11.80)
   hosts: PUB1_node1
   connection: local
   gather_facts: false
+  tags: [pub1]
   environment:
     SC_HOST: "https://10.5.11.80"
+    SC_USERNAME: "{{ sc_username }}"
+    SC_PASSWORD: "{{ sc_password }}"
+  tasks:
+    - name: Get all roles
+      scale_computing.hypercore.api:
+        action: get
+        endpoint: /rest/v1/Role
+      register: role_data
+
+    - name: Role list
+      ansible.builtin.debug:
+        msg: "{{ item.name }} | {{ item.uuid }}"
+      loop: "{{ role_data.record }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+# =============================================================================
+- name: Discover Roles - PUB2 (10.5.11.110)
+  hosts: PUB2_node1
+  connection: local
+  gather_facts: false
+  tags: [pub2]
+  environment:
+    SC_HOST: "https://10.5.11.110"
+    SC_USERNAME: "{{ sc_username }}"
+    SC_PASSWORD: "{{ sc_password }}"
+  tasks:
+    - name: Get all roles
+      scale_computing.hypercore.api:
+        action: get
+        endpoint: /rest/v1/Role
+      register: role_data
+
+    - name: Role list
+      ansible.builtin.debug:
+        msg: "{{ item.name }} | {{ item.uuid }}"
+      loop: "{{ role_data.record }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+# =============================================================================
+- name: Discover Roles - PUB3 (10.5.11.100)
+  hosts: PUB3_node1
+  connection: local
+  gather_facts: false
+  tags: [pub3]
+  environment:
+    SC_HOST: "https://10.5.11.100"
     SC_USERNAME: "{{ sc_username }}"
     SC_PASSWORD: "{{ sc_password }}"
   tasks:

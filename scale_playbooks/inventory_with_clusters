@@ -42,7 +42,7 @@ PUB6 ansible_host=10.5.11.60
 PUB9_node1 ansible_host=10.5.11.90
 PUB9_node2 ansible_host=10.5.11.91
 PUB9_node2 ansible_host=10.5.11.92
-PUB10_node1 ansible_host=10.5.11.100
+PUB3_node1 ansible_host=10.5.11.100
 
 [pub1]
 PUB1_node1 ansible_host=10.5.11.80
@@ -65,5 +65,5 @@ PUB9_node1 ansible_host=10.5.11.90
 PUB9_node2 ansible_host=10.5.11.91
 PUB9_node2 ansible_host=10.5.11.92
 
-[pub10]
-PUB10_node1 ansible_host=10.5.11.100
+[pub3]
+PUB3_node1 ansible_host=10.5.11.100
