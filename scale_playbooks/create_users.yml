@@ -172,6 +172,19 @@
       when: users | length > 0
 
 # =============================================================================
+- name: Send welcome emails to new users
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tags: create
+  tasks:
+    - name: Email credentials to each new user
+      ansible.builtin.command:
+        cmd: /opt/homebrew/Cellar/ansible/13.6.0_1/libexec/bin/python fetch_sheet_users.py --mode send-emails
+        chdir: "{{ playbook_dir }}"
+      changed_when: true
+
+# =============================================================================
 - name: Mark new users as done in Google Sheet
   hosts: localhost
   connection: local
