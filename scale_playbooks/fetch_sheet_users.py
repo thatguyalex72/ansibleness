@@ -76,6 +76,8 @@ CC_COL        = "SC//Sales Team Affiliation"
 OUTPUT_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "users.yml")
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
+TIMESTAMP_COL = "Timestamp"
+
 EMAIL_SUBJECT = "SC//Showcase - Public Cluster Info"
 EMAIL_TEMPLATE = """\
 Hey there!
@@ -124,6 +126,18 @@ you create is assigned to your VMTag.
 
 If you have any questions please let me know!"""
 
+DUPLICATE_SUBJECT = "SC//Demo Lab — Duplicate Submission: {full_name}"
+DUPLICATE_TEMPLATE = """\
+Hi,
+
+This is an automated notification from the SC//Demo Lab provisioning system.
+
+{full_name} from {company} has already been submitted for access to the SC//Demo \
+Lab and their account is active. Please verify they are able to connect to the \
+lab, or engage your territory SA and Alex as needed.
+
+If you have any questions, please reach out directly."""
+
 
 def build_service():
     creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
@@ -136,6 +150,12 @@ def get_sheet_info(service):
     name = SHEET_NAME or props["title"]
     print(f"Using sheet tab: {name}")
     return name, props["sheetId"]
+
+
+def extract_email(value):
+    """Pull a bare email address out of strings like 'EMEA - emea@scalecomputing.com'."""
+    match = re.search(r"[\w.+-]+@[\w-]+\.[a-zA-Z]+", value)
+    return match.group(0) if match else ""
 
 
 def generate_username(full_name):
@@ -208,6 +228,7 @@ def fetch_users(service):
     headers = rows[0]
 
     try:
+        timestamp_idx = headers.index(TIMESTAMP_COL)
         username_idx  = headers.index(USERNAME_COL)
         full_name_idx = headers.index(FULL_NAME_COL)
         password_idx  = headers.index(PASSWORD_COL)
@@ -241,27 +262,43 @@ def fetch_users(service):
             return False
         return values[0].get("userEnteredFormat", {}).get("textFormat", {}).get("italic", False)
 
-    # Build existing username sets for conflict checking.
-    # Only include italic (already created) rows from the sheet — pending rows
-    # should not conflict with themselves.
-    print("Checking for existing usernames...")
-    sheet_usernames = {
-        row[username_idx].strip().lower()
-        for i, row in enumerate(rows[1:], start=1)
-        if is_italic(i) and len(row) > username_idx and row[username_idx].strip()
-    }
-    print(f"  sheet: {len(sheet_usernames)} existing usernames (italic rows only)")
+    # Build existing username and email sets from italic (already processed) rows.
+    print("Checking for existing usernames and duplicate submissions...")
+    sheet_usernames = set()
+    seen_emails = {}  # email -> {full_name, company, timestamp}
+
+    for i, row in enumerate(rows[1:], start=1):
+        if not is_italic(i):
+            continue
+        def get_italic_col(idx):
+            return row[idx].strip() if idx < len(row) else ""
+        uname = get_italic_col(username_idx)
+        email = get_italic_col(email_idx)
+        if uname:
+            sheet_usernames.add(uname.lower())
+        raw_email = get_italic_col(email_idx)
+        clean_email = extract_email(raw_email) if raw_email else ""
+        if clean_email:
+            seen_emails[clean_email.lower()] = {
+                "full_name": get_italic_col(full_name_idx),
+                "company":   get_italic_col(company_idx),
+                "timestamp": get_italic_col(timestamp_idx),
+            }
+
+    print(f"  sheet: {len(sheet_usernames)} existing usernames, {len(seen_emails)} processed emails (italic rows only)")
     cluster_usernames = get_cluster_usernames()
     existing_usernames = sheet_usernames | cluster_usernames
 
     users = []
     conflicts = []
+    duplicates = []
     skipped_italic = 0
     skipped_empty = 0
     writeback_updates = []
 
-    # Track usernames generated this run to catch same-batch duplicates
+    # Track usernames and emails seen this run to catch same-batch duplicates
     generated_this_run = set()
+    emails_this_run = set()
 
     for i, row in enumerate(rows[1:], start=1):
         if is_italic(i):
@@ -277,7 +314,33 @@ def fetch_users(service):
         email     = get_col(email_idx)
         vmtag     = get_col(vmtag_idx)
         company   = get_col(company_idx)
-        cc        = get_col(cc_idx)
+        cc        = extract_email(get_col(cc_idx))
+        timestamp = get_col(timestamp_idx)
+
+        # Duplicate submission check — same email already processed or in this batch
+        email_lower = email.lower() if email else ""
+        if email_lower and email_lower in seen_emails:
+            duplicates.append({
+                "full_name":          full_name,
+                "company":            company,
+                "cc":                 cc,
+                "sheet_row":          i + 1,
+                "original_timestamp": seen_emails[email_lower]["timestamp"],
+                "duplicate_timestamp": timestamp,
+            })
+            continue
+        if email_lower and email_lower in emails_this_run:
+            duplicates.append({
+                "full_name":          full_name,
+                "company":            company,
+                "cc":                 cc,
+                "sheet_row":          i + 1,
+                "original_timestamp": timestamp,
+                "duplicate_timestamp": timestamp,
+            })
+            continue
+        if email_lower:
+            emails_this_run.add(email_lower)
 
         # Auto-generate username if missing
         if not username:
@@ -350,7 +413,7 @@ def fetch_users(service):
 
     with open(OUTPUT_FILE, "w") as f:
         yaml.dump(
-            {"users": users, "conflicts": conflicts},
+            {"users": users, "conflicts": conflicts, "duplicates": duplicates},
             f,
             default_flow_style=False,
             allow_unicode=True,
@@ -359,6 +422,7 @@ def fetch_users(service):
     print(
         f"Wrote {len(users)} new users to {OUTPUT_FILE} "
         f"({skipped_italic} already done"
+        + (f", {len(duplicates)} duplicate(s)" if duplicates else "")
         + (f", {len(conflicts)} conflict(s)" if conflicts else "")
         + (f", {skipped_empty} empty rows" if skipped_empty else "")
         + ")"
@@ -378,13 +442,15 @@ def send_emails():
     with open(OUTPUT_FILE) as f:
         data = yaml.safe_load(f)
 
-    users = data.get("users", [])
-    if not users:
-        print("No users to email.")
+    users      = data.get("users", [])
+    duplicates = data.get("duplicates", [])
+    if not users and not duplicates:
+        print("No emails to send.")
         return
 
     sent = 0
     skipped = 0
+    dup_sent = 0
 
     with smtplib.SMTP("smtp.gmail.com", 587) as smtp:
         smtp.starttls()
@@ -418,7 +484,28 @@ def send_emails():
                   + (f" cc: {cc_email}" if cc_email and "@" in cc_email else ""))
             sent += 1
 
-    print(f"Emails sent: {sent}" + (f" ({skipped} skipped — no email in sheet)" if skipped else ""))
+        for dup in duplicates:
+            cc_email = dup.get("cc", "").strip()
+            if not cc_email or "@" not in cc_email:
+                print(f"  skipping duplicate notice for {dup['full_name']} — no territory email")
+                continue
+
+            body = DUPLICATE_TEMPLATE.format(
+                full_name=dup["full_name"],
+                company=dup["company"],
+            )
+            msg = MIMEText(body)
+            msg["Subject"] = DUPLICATE_SUBJECT.format(full_name=dup["full_name"])
+            msg["From"] = GMAIL_ADDRESS
+            msg["To"] = cc_email
+
+            smtp.sendmail(GMAIL_ADDRESS, [cc_email], msg.as_string())
+            print(f"  duplicate notice sent to territory team <{cc_email}> for {dup['full_name']}")
+            dup_sent += 1
+
+    print(f"Welcome emails sent: {sent}" + (f" ({skipped} skipped — no email in sheet)" if skipped else ""))
+    if dup_sent:
+        print(f"Duplicate notifications sent: {dup_sent}")
 
 
 def mark_done(service, num_cols=None):
@@ -429,12 +516,8 @@ def mark_done(service, num_cols=None):
     with open(OUTPUT_FILE) as f:
         data = yaml.safe_load(f)
 
-    users = data.get("users", [])
-    row_numbers = [u["sheet_row"] for u in users if "sheet_row" in u]
-
-    if not row_numbers:
-        print("No rows to mark.")
-        return
+    users      = data.get("users", [])
+    duplicates = data.get("duplicates", [])
 
     sheet_name, sheet_id = get_sheet_info(service)
     if num_cols is None:
@@ -444,8 +527,12 @@ def mark_done(service, num_cols=None):
         ).execute()
         num_cols = len(header_result.get("values", [[]])[0])
 
-    requests = [
-        {
+    user_rows = [u["sheet_row"] for u in users if "sheet_row" in u]
+    dup_rows  = [d["sheet_row"] for d in duplicates if "sheet_row" in d]
+
+    requests = []
+    for row_num in user_rows:
+        requests.append({
             "repeatCell": {
                 "range": {
                     "sheetId": sheet_id,
@@ -457,16 +544,35 @@ def mark_done(service, num_cols=None):
                 "cell": {"userEnteredFormat": {"textFormat": {"italic": True}}},
                 "fields": "userEnteredFormat.textFormat.italic",
             }
-        }
-        for row_num in row_numbers
-    ]
+        })
+    for row_num in dup_rows:
+        requests.append({
+            "repeatCell": {
+                "range": {
+                    "sheetId": sheet_id,
+                    "startRowIndex": row_num - 1,
+                    "endRowIndex": row_num,
+                    "startColumnIndex": 0,
+                    "endColumnIndex": num_cols,
+                },
+                "cell": {"userEnteredFormat": {"textFormat": {"italic": True, "strikethrough": True}}},
+                "fields": "userEnteredFormat.textFormat.italic,userEnteredFormat.textFormat.strikethrough",
+            }
+        })
+
+    if not requests:
+        print("No rows to mark.")
+        return
 
     service.spreadsheets().batchUpdate(
         spreadsheetId=SPREADSHEET_ID,
         body={"requests": requests},
     ).execute()
 
-    print(f"Marked {len(row_numbers)} rows as italic in the sheet.")
+    if user_rows:
+        print(f"Marked {len(user_rows)} row(s) as italic (created).")
+    if dup_rows:
+        print(f"Marked {len(dup_rows)} row(s) as italic + strikethrough (duplicate).")
 
 
 def main():

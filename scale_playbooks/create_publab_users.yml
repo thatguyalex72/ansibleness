@@ -43,6 +43,14 @@
     - name: Load users
       ansible.builtin.include_vars: users.yml
 
+    - name: "↩ DUPLICATE SUBMISSIONS — territory team will be notified"
+      ansible.builtin.debug:
+        msg: "Row {{ item.sheet_row }}: {{ item.full_name }} ({{ item.company }}) — originally submitted {{ item.original_timestamp }}"
+      loop: "{{ duplicates | default([]) }}"
+      loop_control:
+        label: "{{ item.full_name }}"
+      when: duplicates | default([]) | length > 0
+
     - name: "⚠ USERNAME CONFLICTS — resolve these manually in the sheet before re-running"
       ansible.builtin.debug:
         msg: "Row {{ item.sheet_row }}: '{{ item.username }}' ({{ item.full_name }}) — already exists on {{ item.source }}"
@@ -54,7 +62,7 @@
     - name: No new users found
       ansible.builtin.debug:
         msg: "No new users to create — all sheet rows are already marked done."
-      when: users | length == 0 and conflicts | default([]) | length == 0
+      when: users | length == 0 and conflicts | default([]) | length == 0 and duplicates | default([]) | length == 0
 
     - name: "{{ users | length }} user(s) pending creation"
       ansible.builtin.debug:
