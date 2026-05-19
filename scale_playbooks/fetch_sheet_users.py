@@ -4,6 +4,10 @@ Reads the Scale demo lab user request Google Sheet and writes users.yml
 for use by create_users.yml.
 
 Rows already marked italic in the sheet are skipped (already created).
+For rows with empty Username/Password, credentials are auto-generated and
+written back to the sheet. Conflicts are checked against both the sheet
+and all publab clusters before writing anything.
+
 After Ansible finishes, run with --mode send-emails to notify users,
 then --mode mark-done to italicize the newly created rows.
 
@@ -19,6 +23,8 @@ Setup:
          export GSHEET_SPREADSHEET_ID="sheet_id_from_url"
          export GMAIL_ADDRESS="you@gmail.com"
          export GMAIL_APP_PASSWORD="your16charapppassword"
+         export SC_USERNAME="alexapi"
+         export SC_PASSWORD="yourpassword"
 
     The sheet ID is the long string in the Google Sheet URL:
       https://docs.google.com/spreadsheets/d/<SHEET_ID>/edit
@@ -29,9 +35,14 @@ Column config:
 """
 
 import argparse
+import base64
+import json
 import os
+import re
 import smtplib
+import ssl
 import sys
+import urllib.request
 from email.mime.text import MIMEText
 
 import yaml
@@ -39,10 +50,19 @@ from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 
 SERVICE_ACCOUNT_FILE = os.environ.get("GSHEET_SERVICE_ACCOUNT_FILE", "service_account.json")
-SPREADSHEET_ID = os.environ.get("GSHEET_SPREADSHEET_ID", "")
-SHEET_NAME = os.environ.get("GSHEET_SHEET_NAME", "")
-GMAIL_ADDRESS = os.environ.get("GMAIL_ADDRESS", "")
-GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", "")
+SPREADSHEET_ID       = os.environ.get("GSHEET_SPREADSHEET_ID", "")
+SHEET_NAME           = os.environ.get("GSHEET_SHEET_NAME", "")
+GMAIL_ADDRESS        = os.environ.get("GMAIL_ADDRESS", "")
+GMAIL_APP_PASSWORD   = os.environ.get("GMAIL_APP_PASSWORD", "")
+SC_USERNAME          = os.environ.get("SC_USERNAME", "")
+SC_PASSWORD          = os.environ.get("SC_PASSWORD", "")
+
+# Publab clusters to check for existing users
+PUBLAB_CLUSTERS = [
+    "https://10.5.11.80",
+    "https://10.5.11.110",
+    "https://10.5.11.100",
+]
 
 # Update these to match the exact column headers in your Google Sheet
 USERNAME_COL = "Username"
@@ -50,6 +70,7 @@ FULL_NAME_COL = "Prospect's Name (Ex: Alex Smith)"
 PASSWORD_COL  = "Password"
 EMAIL_COL     = "Email (alex@acme_it.com)"
 VMTAG_COL     = "Templates/Tags"
+COMPANY_COL   = "Company/Partner Name (Acme IT)"
 
 OUTPUT_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "users.yml")
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
@@ -116,6 +137,51 @@ def get_sheet_info(service):
     return name, props["sheetId"]
 
 
+def generate_username(full_name):
+    parts = full_name.strip().split()
+    if not parts:
+        return ""
+    first_initial = parts[0][0].lower()
+    last_name = re.sub(r"[^a-z0-9]", "", parts[-1].lower())
+    return first_initial + last_name
+
+
+def generate_password(company_name):
+    first_word = company_name.strip().split()[0] if company_name.strip() else "Scale"
+    clean_word = re.sub(r"[^a-zA-Z0-9]", "", first_word)
+    return f"{clean_word}##Scale2026"
+
+
+def get_cluster_usernames():
+    """Returns set of usernames already on any publab cluster."""
+    if not SC_USERNAME or not SC_PASSWORD:
+        print("  WARNING: SC_USERNAME/SC_PASSWORD not set — skipping cluster conflict check")
+        return set()
+
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+
+    credentials = base64.b64encode(f"{SC_USERNAME}:{SC_PASSWORD}".encode()).decode()
+    usernames = set()
+
+    for cluster_url in PUBLAB_CLUSTERS:
+        try:
+            req = urllib.request.Request(
+                f"{cluster_url}/rest/v1/ClusterMember",
+                headers={"Authorization": f"Basic {credentials}"},
+            )
+            with urllib.request.urlopen(req, context=ctx, timeout=10) as resp:
+                data = json.loads(resp.read())
+                cluster_users = {u.get("username", "").lower() for u in data}
+                usernames.update(cluster_users)
+                print(f"  {cluster_url}: {len(cluster_users)} users found")
+        except Exception as e:
+            print(f"  WARNING: could not reach {cluster_url}: {e}")
+
+    return usernames
+
+
 def fetch_users(service):
     sheet_name, _ = get_sheet_info(service)
     values_result = service.spreadsheets().values().get(
@@ -137,6 +203,7 @@ def fetch_users(service):
         password_idx  = headers.index(PASSWORD_COL)
         email_idx     = headers.index(EMAIL_COL)
         vmtag_idx     = headers.index(VMTAG_COL)
+        company_idx   = headers.index(COMPANY_COL)
     except ValueError as e:
         print(f"ERROR: Column not found: {e}", file=sys.stderr)
         print(f"Available columns: {headers}", file=sys.stderr)
@@ -163,9 +230,27 @@ def fetch_users(service):
             return False
         return values[0].get("userEnteredFormat", {}).get("textFormat", {}).get("italic", False)
 
+    # Build existing username sets for conflict checking.
+    # Only include italic (already created) rows from the sheet — pending rows
+    # should not conflict with themselves.
+    print("Checking for existing usernames...")
+    sheet_usernames = {
+        row[username_idx].strip().lower()
+        for i, row in enumerate(rows[1:], start=1)
+        if is_italic(i) and len(row) > username_idx and row[username_idx].strip()
+    }
+    print(f"  sheet: {len(sheet_usernames)} existing usernames (italic rows only)")
+    cluster_usernames = get_cluster_usernames()
+    existing_usernames = sheet_usernames | cluster_usernames
+
     users = []
+    conflicts = []
     skipped_italic = 0
     skipped_empty = 0
+    writeback_updates = []
+
+    # Track usernames generated this run to catch same-batch duplicates
+    generated_this_run = set()
 
     for i, row in enumerate(rows[1:], start=1):
         if is_italic(i):
@@ -180,10 +265,50 @@ def fetch_users(service):
         password  = get_col(password_idx)
         email     = get_col(email_idx)
         vmtag     = get_col(vmtag_idx)
+        company   = get_col(company_idx)
 
-        if not username or not password:
-            skipped_empty += 1
+        # Auto-generate username if missing
+        if not username:
+            if not full_name:
+                skipped_empty += 1
+                continue
+            username = generate_username(full_name)
+            writeback_updates.append({
+                "range": f"{sheet_name}!{chr(65 + username_idx)}{i + 1}",
+                "values": [[username]],
+            })
+
+        # Auto-generate password if missing
+        if not password:
+            if not company:
+                skipped_empty += 1
+                continue
+            password = generate_password(company)
+            writeback_updates.append({
+                "range": f"{sheet_name}!{chr(65 + password_idx)}{i + 1}",
+                "values": [[password]],
+            })
+
+        # Conflict check
+        username_lower = username.lower()
+        conflict_source = None
+        if username_lower in generated_this_run:
+            conflict_source = "same batch"
+        elif username_lower in cluster_usernames:
+            conflict_source = "cluster"
+        elif username_lower in sheet_usernames:
+            conflict_source = "sheet"
+
+        if conflict_source:
+            conflicts.append({
+                "username":  username,
+                "full_name": full_name,
+                "sheet_row": i + 1,
+                "source":    conflict_source,
+            })
             continue
+
+        generated_this_run.add(username_lower)
 
         users.append({
             "username":  username,
@@ -194,12 +319,28 @@ def fetch_users(service):
             "sheet_row": i + 1,
         })
 
+    # Write generated credentials back to sheet
+    if writeback_updates:
+        service.spreadsheets().values().batchUpdate(
+            spreadsheetId=SPREADSHEET_ID,
+            body={"valueInputOption": "RAW", "data": writeback_updates},
+        ).execute()
+        print(f"Wrote {len(writeback_updates)} generated credential(s) back to sheet")
+
     with open(OUTPUT_FILE, "w") as f:
-        yaml.dump({"users": users}, f, default_flow_style=False, allow_unicode=True)
+        yaml.dump(
+            {"users": users, "conflicts": conflicts},
+            f,
+            default_flow_style=False,
+            allow_unicode=True,
+        )
 
     print(
         f"Wrote {len(users)} new users to {OUTPUT_FILE} "
-        f"({skipped_italic} already done, {skipped_empty} empty rows skipped)"
+        f"({skipped_italic} already done"
+        + (f", {len(conflicts)} conflict(s)" if conflicts else "")
+        + (f", {skipped_empty} empty rows" if skipped_empty else "")
+        + ")"
     )
     return len(headers)
 
@@ -316,7 +457,7 @@ def main():
         choices=["fetch", "send-emails", "mark-done"],
         default="fetch",
         help=(
-            "fetch: read sheet, write users.yml  |  "
+            "fetch: read sheet, generate missing credentials, write users.yml  |  "
             "send-emails: email credentials to each user  |  "
             "mark-done: mark processed rows italic"
         ),

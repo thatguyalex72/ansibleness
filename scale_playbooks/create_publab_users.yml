@@ -27,6 +27,11 @@
         cmd: /opt/homebrew/Cellar/ansible/13.6.0_1/libexec/bin/python fetch_sheet_users.py --mode fetch
         chdir: "{{ playbook_dir }}"
       changed_when: true
+      register: fetch_result
+
+    - name: Fetch output
+      ansible.builtin.debug:
+        msg: "{{ fetch_result.stdout_lines }}"
 
 # =============================================================================
 - name: Check - Preview pending users
@@ -38,10 +43,18 @@
     - name: Load users
       ansible.builtin.include_vars: users.yml
 
+    - name: "⚠ USERNAME CONFLICTS — resolve these manually in the sheet before re-running"
+      ansible.builtin.debug:
+        msg: "Row {{ item.sheet_row }}: '{{ item.username }}' ({{ item.full_name }}) — already exists on {{ item.source }}"
+      loop: "{{ conflicts | default([]) }}"
+      loop_control:
+        label: "{{ item.username }}"
+      when: conflicts | default([]) | length > 0
+
     - name: No new users found
       ansible.builtin.debug:
         msg: "No new users to create — all sheet rows are already marked done."
-      when: users | length == 0
+      when: users | length == 0 and conflicts | default([]) | length == 0
 
     - name: "{{ users | length }} user(s) pending creation"
       ansible.builtin.debug:
