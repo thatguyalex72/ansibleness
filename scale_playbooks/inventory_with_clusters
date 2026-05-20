@@ -67,3 +67,6 @@ PUB9_node2 ansible_host=10.5.11.92
 
 [pub3]
 PUB3_node1 ansible_host=10.5.11.100
+
+[publab_infra]
+syslog_publab ansible_host=10.5.11.222

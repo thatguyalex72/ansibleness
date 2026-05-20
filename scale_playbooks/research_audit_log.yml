@@ -1,0 +1,74 @@
+---
+# Research playbook — inspect publab syslog for event types and VM activity.
+#
+# USAGE (from scale_playbooks/):
+#   ansible-playbook research_audit_log.yml
+
+- name: Research Syslog Events - PUB1
+  hosts: syslog_publab
+  gather_facts: false
+  vars:
+    sample_log: /var/log/remote/scale-10-10-10-80
+    publab_logs:
+      - /var/log/remote/scale-10-10-10-80
+      - /var/log/remote/scale-10-10-10-81
+      - /var/log/remote/scale-10-10-10-82
+      - /var/log/remote/scale-10-10-5-100
+      - /var/log/remote/scale-10-10-10-110
+  tasks:
+    - name: Sample of non-login event types (what else is logged?)
+      ansible.builtin.shell: >
+        grep -h "\[Info\]" {{ sample_log }}
+        | grep -v "Logged In\|message repeated"
+        | tail -20
+      register: event_sample
+      changed_when: false
+
+    - name: Non-login events sample
+      ansible.builtin.debug:
+        msg: "{{ event_sample.stdout_lines }}"
+
+    - name: Check for VM creation events
+      ansible.builtin.shell: >
+        grep -h -i "virtual machine\|VirDomain\|created\|vm " {{ sample_log }}
+        | grep -v "message repeated"
+        | tail -20
+      register: vm_events
+      changed_when: false
+      failed_when: vm_events.rc > 1
+
+    - name: VM-related events sample
+      ansible.builtin.debug:
+        msg: "{{ vm_events.stdout_lines }}"
+
+    - name: Count untagged VMs across all logs (users who never tagged)
+      ansible.builtin.shell: >
+        grep -h "Logged In" {{ publab_logs | join(' ') }}
+        | grep -v "message repeated"
+        | grep -oP '\[Info\] \[\K[^\]]+'
+        | sort -u
+      register: all_users_seen
+      changed_when: false
+
+    - name: Total unique users seen in logs
+      ansible.builtin.debug:
+        msg: "{{ all_users_seen.stdout_lines | length }} unique users found in logs"
+
+# =============================================================================
+- name: Research VM fields - what timestamps are available?
+  hosts: PUB1_node1
+  connection: local
+  gather_facts: false
+  environment:
+    SC_HOST: "https://10.5.11.80"
+    SC_USERNAME: "{{ sc_username }}"
+    SC_PASSWORD: "{{ sc_password }}"
+  tasks:
+    - name: Get all VMs
+      scale_computing.hypercore.vm_info:
+      register: all_vms
+
+    - name: Show all fields on first VM (what timestamps exist?)
+      ansible.builtin.debug:
+        msg: "{{ all_vms.records | first }}"
+      when: all_vms.records | length > 0

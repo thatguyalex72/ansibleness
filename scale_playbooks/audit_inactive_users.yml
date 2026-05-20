@@ -1,0 +1,321 @@
+---
+# Audits user login activity across publab clusters via syslog.
+# Reports users who haven't logged in for more than inactive_days (default: 30).
+# VM cleanup runs only when --tags cleanup is passed explicitly.
+#
+# USAGE (from scale_playbooks/):
+#   Report only:      ansible-playbook audit_inactive_users.yml
+#   Custom threshold: ansible-playbook audit_inactive_users.yml -e inactive_days=60
+#   With cleanup:     ansible-playbook audit_inactive_users.yml --tags cleanup
+#
+# TAGS: cleanup
+
+- name: Parse login activity from syslog
+  hosts: syslog_publab
+  gather_facts: false
+  tags: always
+  check_mode: false
+  vars:
+    inactive_days: 30
+    exclude_accounts:
+      - alexapi
+      - admin
+      - zabbix
+      - system
+      - scale
+      - scalesupport
+      - parallels
+    publab_log_files:
+      - /var/log/remote/scale-10-10-10-80
+      - /var/log/remote/scale-10-10-10-81
+      - /var/log/remote/scale-10-10-10-82
+      - /var/log/remote/scale-10-10-5-100
+      - /var/log/remote/scale-10-10-10-110
+  tasks:
+    - name: Deploy log parser
+      ansible.builtin.copy:
+        dest: /tmp/parse_logins.py
+        mode: "0755"
+        content: |
+          #!/usr/bin/env python3
+          import json, re, sys
+          from datetime import datetime
+
+          log_files = json.loads(sys.argv[1])
+          exclude   = set(json.loads(sys.argv[2]))
+          threshold = int(sys.argv[3])
+
+          last_seen = {}
+          for log_file in log_files:
+              try:
+                  with open(log_file) as f:
+                      for line in f:
+                          if "Logged In" not in line or "message repeated" in line:
+                              continue
+                          user_match   = re.search(r"\[Info\] \[([^\]]+)\]", line)
+                          expiry_match = re.search(r"session will expire at (\d{4}-\d{2}-\d{2})", line)
+                          if not user_match or not expiry_match:
+                              continue
+                          username = user_match.group(1)
+                          if username in exclude:
+                              continue
+                          expiry = datetime.strptime(expiry_match.group(1), "%Y-%m-%d")
+                          if username not in last_seen or expiry > last_seen[username]:
+                              last_seen[username] = expiry
+              except FileNotFoundError:
+                  pass
+
+          today   = datetime.today()
+          results = []
+          for username in sorted(last_seen):
+              days_inactive = (today - last_seen[username]).days
+              results.append({
+                  "username":      username,
+                  "last_login":    last_seen[username].strftime("%Y-%m-%d"),
+                  "days_inactive": days_inactive,
+                  "inactive":      days_inactive > threshold,
+              })
+          print(json.dumps(results))
+
+    - name: Run log parser
+      ansible.builtin.command:
+        cmd: >
+          python3 /tmp/parse_logins.py
+          '{{ publab_log_files | to_json }}'
+          '{{ exclude_accounts | to_json }}'
+          '{{ inactive_days }}'
+      register: parser_output
+      changed_when: false
+
+    - name: Remove log parser
+      ansible.builtin.file:
+        path: /tmp/parse_logins.py
+        state: absent
+
+    - name: Store activity results
+      ansible.builtin.set_fact:
+        all_activity:      "{{ parser_output.stdout | from_json }}"
+        inactive_users:    "{{ parser_output.stdout | from_json | selectattr('inactive') | list }}"
+        active_users:      "{{ parser_output.stdout | from_json | rejectattr('inactive') | list }}"
+
+# =============================================================================
+- name: Inactive User Report
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    inactive_days: 30
+  tasks:
+    - name: Load activity from syslog play
+      ansible.builtin.set_fact:
+        inactive_users: "{{ hostvars['syslog_publab']['inactive_users'] }}"
+        active_users:   "{{ hostvars['syslog_publab']['active_users'] }}"
+        all_activity:   "{{ hostvars['syslog_publab']['all_activity'] }}"
+
+    - name: "Active users (logged in within {{ inactive_days }} days)"
+      ansible.builtin.debug:
+        msg: "{{ item.username }} | last login: {{ item.last_login }} | {{ item.days_inactive }} days ago"
+      loop: "{{ active_users | sort(attribute='days_inactive') | reverse | list }}"
+      loop_control:
+        label: "{{ item.username }}"
+      when: active_users | length > 0
+
+    - name: No inactive users found
+      ansible.builtin.debug:
+        msg: "All users have logged in within the last {{ inactive_days }} days."
+      when: inactive_users | length == 0
+
+    - name: "⚠ Inactive users (no login in {{ inactive_days }}+ days)"
+      ansible.builtin.debug:
+        msg: "{{ item.username }} | last login: {{ item.last_login }} | {{ item.days_inactive }} days ago"
+      loop: "{{ inactive_users | sort(attribute='days_inactive') | reverse | list }}"
+      loop_control:
+        label: "{{ item.username }}"
+      when: inactive_users | length > 0
+
+    - name: "Summary | {{ all_activity | length }} total users | {{ active_users | length }} active | {{ inactive_users | length }} inactive ({{ inactive_days }}+ days)"
+      ansible.builtin.debug:
+        msg: >
+          Run with --tags cleanup to delete VMs belonging to inactive users.
+          Use -e inactive_days=N to adjust the threshold (current: {{ inactive_days }}).
+
+# =============================================================================
+- name: Cleanup - Identify VMs on PUB1
+  hosts: PUB1_node1
+  connection: local
+  gather_facts: false
+  tags: [never, cleanup]
+  environment:
+    SC_HOST: "https://10.5.11.80"
+    SC_USERNAME: "{{ sc_username }}"
+    SC_PASSWORD: "{{ sc_password }}"
+  tasks:
+    - name: Load inactive usernames
+      ansible.builtin.set_fact:
+        inactive_usernames: "{{ hostvars['syslog_publab']['inactive_users'] | map(attribute='username') | list }}"
+
+    - name: Get all VMs
+      scale_computing.hypercore.vm_info:
+      register: all_vms
+
+    - name: Identify untagged VMs
+      ansible.builtin.set_fact:
+        pub1_untagged: "{{ all_vms.records | selectattr('tags', 'equalto', []) | list }}"
+
+    - name: Initialize inactive owned list
+      ansible.builtin.set_fact:
+        pub1_inactive_owned: []
+
+    - name: Identify VMs with a tag matching an inactive username
+      ansible.builtin.set_fact:
+        pub1_inactive_owned: "{{ pub1_inactive_owned + [item] }}"
+      loop: "{{ all_vms.records }}"
+      when:
+        - item.tags | length > 0
+        - item.tags | intersect(inactive_usernames) | length > 0
+      loop_control:
+        label: "{{ item.vm_name }}"
+
+    - name: "PUB1 — untagged VMs ({{ pub1_untagged | length }})"
+      ansible.builtin.debug:
+        msg: "{{ item.vm_name }} | {{ item.power_state }}"
+      loop: "{{ pub1_untagged }}"
+      loop_control:
+        label: "{{ item.vm_name }}"
+      when: pub1_untagged | length > 0
+
+    - name: "PUB1 — VMs owned by inactive users ({{ pub1_inactive_owned | length }})"
+      ansible.builtin.debug:
+        msg: "{{ item.vm_name }} | tags: {{ item.tags }} | {{ item.power_state }}"
+      loop: "{{ pub1_inactive_owned }}"
+      loop_control:
+        label: "{{ item.vm_name }}"
+      when: pub1_inactive_owned | length > 0
+
+# =============================================================================
+- name: Cleanup - Identify VMs on PUB2
+  hosts: PUB2_node1
+  connection: local
+  gather_facts: false
+  tags: [never, cleanup]
+  environment:
+    SC_HOST: "https://10.5.11.110"
+    SC_USERNAME: "{{ sc_username }}"
+    SC_PASSWORD: "{{ sc_password }}"
+  tasks:
+    - name: Load inactive usernames
+      ansible.builtin.set_fact:
+        inactive_usernames: "{{ hostvars['syslog_publab']['inactive_users'] | map(attribute='username') | list }}"
+
+    - name: Get all VMs
+      scale_computing.hypercore.vm_info:
+      register: all_vms
+
+    - name: Identify untagged VMs
+      ansible.builtin.set_fact:
+        pub2_untagged: "{{ all_vms.records | selectattr('tags', 'equalto', []) | list }}"
+
+    - name: Initialize inactive owned list
+      ansible.builtin.set_fact:
+        pub2_inactive_owned: []
+
+    - name: Identify VMs with a tag matching an inactive username
+      ansible.builtin.set_fact:
+        pub2_inactive_owned: "{{ pub2_inactive_owned + [item] }}"
+      loop: "{{ all_vms.records }}"
+      when:
+        - item.tags | length > 0
+        - item.tags | intersect(inactive_usernames) | length > 0
+      loop_control:
+        label: "{{ item.vm_name }}"
+
+    - name: "PUB2 — untagged VMs ({{ pub2_untagged | length }})"
+      ansible.builtin.debug:
+        msg: "{{ item.vm_name }} | {{ item.power_state }}"
+      loop: "{{ pub2_untagged }}"
+      loop_control:
+        label: "{{ item.vm_name }}"
+      when: pub2_untagged | length > 0
+
+    - name: "PUB2 — VMs owned by inactive users ({{ pub2_inactive_owned | length }})"
+      ansible.builtin.debug:
+        msg: "{{ item.vm_name }} | tags: {{ item.tags }} | {{ item.power_state }}"
+      loop: "{{ pub2_inactive_owned }}"
+      loop_control:
+        label: "{{ item.vm_name }}"
+      when: pub2_inactive_owned | length > 0
+
+# =============================================================================
+- name: Cleanup - Identify VMs on PUB3
+  hosts: PUB3_node1
+  connection: local
+  gather_facts: false
+  tags: [never, cleanup]
+  environment:
+    SC_HOST: "https://10.5.11.100"
+    SC_USERNAME: "{{ sc_username }}"
+    SC_PASSWORD: "{{ sc_password }}"
+  tasks:
+    - name: Load inactive usernames
+      ansible.builtin.set_fact:
+        inactive_usernames: "{{ hostvars['syslog_publab']['inactive_users'] | map(attribute='username') | list }}"
+
+    - name: Get all VMs
+      scale_computing.hypercore.vm_info:
+      register: all_vms
+
+    - name: Identify untagged VMs
+      ansible.builtin.set_fact:
+        pub3_untagged: "{{ all_vms.records | selectattr('tags', 'equalto', []) | list }}"
+
+    - name: Initialize inactive owned list
+      ansible.builtin.set_fact:
+        pub3_inactive_owned: []
+
+    - name: Identify VMs with a tag matching an inactive username
+      ansible.builtin.set_fact:
+        pub3_inactive_owned: "{{ pub3_inactive_owned + [item] }}"
+      loop: "{{ all_vms.records }}"
+      when:
+        - item.tags | length > 0
+        - item.tags | intersect(inactive_usernames) | length > 0
+      loop_control:
+        label: "{{ item.vm_name }}"
+
+    - name: "PUB3 — untagged VMs ({{ pub3_untagged | length }})"
+      ansible.builtin.debug:
+        msg: "{{ item.vm_name }} | {{ item.power_state }}"
+      loop: "{{ pub3_untagged }}"
+      loop_control:
+        label: "{{ item.vm_name }}"
+      when: pub3_untagged | length > 0
+
+    - name: "PUB3 — VMs owned by inactive users ({{ pub3_inactive_owned | length }})"
+      ansible.builtin.debug:
+        msg: "{{ item.vm_name }} | tags: {{ item.tags }} | {{ item.power_state }}"
+      loop: "{{ pub3_inactive_owned }}"
+      loop_control:
+        label: "{{ item.vm_name }}"
+      when: pub3_inactive_owned | length > 0
+
+# =============================================================================
+- name: Cleanup - VM summary across all clusters
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tags: [never, cleanup]
+  tasks:
+    - name: Aggregate counts
+      ansible.builtin.set_fact:
+        all_untagged: >-
+          {{ (hostvars['PUB1_node1']['pub1_untagged'] | default([]))
+           + (hostvars['PUB2_node1']['pub2_untagged'] | default([]))
+           + (hostvars['PUB3_node1']['pub3_untagged'] | default([])) }}
+        all_inactive_owned: >-
+          {{ (hostvars['PUB1_node1']['pub1_inactive_owned'] | default([]))
+           + (hostvars['PUB2_node1']['pub2_inactive_owned'] | default([]))
+           + (hostvars['PUB3_node1']['pub3_inactive_owned'] | default([])) }}
+
+    - name: "Summary | {{ all_untagged | length }} untagged VM(s) | {{ all_inactive_owned | length }} VM(s) owned by inactive users | {{ (all_untagged + all_inactive_owned) | length }} total would be deleted"
+      ansible.builtin.debug:
+        msg: "Total VMs in scope for cleanup: {{ (all_untagged + all_inactive_owned) | length }}"
