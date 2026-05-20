@@ -4,9 +4,9 @@
 # After all clusters finish, marks newly created rows italic automatically.
 #
 # USAGE (from scale_playbooks/):
-#   Full run:         ansible-playbook create_users.yml
-#   Preview only:     ansible-playbook create_users.yml --tags check
-#   Single cluster:   ansible-playbook create_users.yml --tags pub1
+#   Full run:         ansible-playbook create_publab_users.yml
+#   Preview only:     ansible-playbook create_publab_users.yml --tags check
+#   Single cluster:   ansible-playbook create_publab_users.yml --tags pub1
 #
 # PREREQUISITES:
 #   1. Set GSHEET_SERVICE_ACCOUNT_FILE and GSHEET_SPREADSHEET_ID env vars.
@@ -20,7 +20,7 @@
   hosts: localhost
   connection: local
   gather_facts: false
-  tags: always
+  tags: [always, check]
   tasks:
     - name: Fetch non-italic users from Google Sheet
       ansible.builtin.command:
@@ -38,7 +38,7 @@
   hosts: localhost
   connection: local
   gather_facts: false
-  tags: always
+  tags: [always, check]
   tasks:
     - name: Load users
       ansible.builtin.include_vars: users.yml
