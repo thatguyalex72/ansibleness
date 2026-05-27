@@ -212,7 +212,7 @@ def get_cluster_usernames():
     return usernames
 
 
-def fetch_users(service):
+def fetch_users(service, dry_run=False, override_usernames=None):
     sheet_name, _ = get_sheet_info(service)
     values_result = service.spreadsheets().values().get(
         spreadsheetId=SPREADSHEET_ID,
@@ -264,7 +264,7 @@ def fetch_users(service):
 
     # Build existing username and email sets from italic (already processed) rows.
     print("Checking for existing usernames and duplicate submissions...")
-    sheet_usernames = set()
+    sheet_usernames = {}  # username_lower -> sheet_row
     seen_emails = {}  # email -> {full_name, company, timestamp}
 
     for i, row in enumerate(rows[1:], start=1):
@@ -275,7 +275,7 @@ def fetch_users(service):
         uname = get_italic_col(username_idx)
         email = get_italic_col(email_idx)
         if uname:
-            sheet_usernames.add(uname.lower())
+            sheet_usernames[uname.lower()] = i + 1
         raw_email = get_italic_col(email_idx)
         clean_email = extract_email(raw_email) if raw_email else ""
         if clean_email:
@@ -287,7 +287,7 @@ def fetch_users(service):
 
     print(f"  sheet: {len(sheet_usernames)} existing usernames, {len(seen_emails)} processed emails (italic rows only)")
     cluster_usernames = get_cluster_usernames()
-    existing_usernames = sheet_usernames | cluster_usernames
+    existing_usernames = set(sheet_usernames) | cluster_usernames
 
     users = []
     conflicts = []
@@ -375,20 +375,27 @@ def fetch_users(service):
         # Conflict check
         username_lower = username.lower()
         conflict_source = None
-        if username_lower in generated_this_run:
+        original_row = None
+        if username_lower in (override_usernames or set()):
+            pass  # force-create despite conflict
+        elif username_lower in generated_this_run:
             conflict_source = "same batch"
         elif username_lower in cluster_usernames:
             conflict_source = "cluster"
         elif username_lower in sheet_usernames:
             conflict_source = "sheet"
+            original_row = sheet_usernames[username_lower]
 
         if conflict_source:
-            conflicts.append({
+            conflict = {
                 "username":  username,
                 "full_name": full_name,
                 "sheet_row": i + 1,
                 "source":    conflict_source,
-            })
+            }
+            if original_row is not None:
+                conflict["original_row"] = original_row
+            conflicts.append(conflict)
             continue
 
         generated_this_run.add(username_lower)
@@ -405,11 +412,14 @@ def fetch_users(service):
 
     # Write generated credentials back to sheet
     if writeback_updates:
-        service.spreadsheets().values().batchUpdate(
-            spreadsheetId=SPREADSHEET_ID,
-            body={"valueInputOption": "RAW", "data": writeback_updates},
-        ).execute()
-        print(f"Wrote {len(writeback_updates)} generated credential(s) back to sheet")
+        if dry_run:
+            print(f"[dry-run] Would write {len(writeback_updates)} generated credential(s) back to sheet")
+        else:
+            service.spreadsheets().values().batchUpdate(
+                spreadsheetId=SPREADSHEET_ID,
+                body={"valueInputOption": "RAW", "data": writeback_updates},
+            ).execute()
+            print(f"Wrote {len(writeback_updates)} generated credential(s) back to sheet")
 
     with open(OUTPUT_FILE, "w") as f:
         yaml.dump(
@@ -595,6 +605,16 @@ def main():
             "mark-done: mark processed rows italic"
         ),
     )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="fetch mode only: skip writing generated credentials back to sheet",
+    )
+    parser.add_argument(
+        "--override",
+        default="",
+        help="fetch mode only: comma-separated usernames to force-create despite conflicts",
+    )
     args = parser.parse_args()
 
     if args.mode == "send-emails":
@@ -604,7 +624,10 @@ def main():
     service = build_service()
 
     if args.mode == "fetch":
-        fetch_users(service)
+        override_usernames = {u.strip().lower() for u in args.override.split(",") if u.strip()}
+        if override_usernames:
+            print(f"  overriding conflict check for: {', '.join(sorted(override_usernames))}")
+        fetch_users(service, dry_run=args.dry_run, override_usernames=override_usernames)
     else:
         mark_done(service)
 

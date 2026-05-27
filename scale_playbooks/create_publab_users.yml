@@ -24,7 +24,10 @@
   tasks:
     - name: Fetch non-italic users from Google Sheet
       ansible.builtin.command:
-        cmd: /opt/homebrew/Cellar/ansible/13.6.0_1/libexec/bin/python fetch_sheet_users.py --mode fetch
+        cmd: >-
+          {{ ansible_playbook_python }} fetch_sheet_users.py --mode fetch
+          {{ '--dry-run' if (ansible_run_tags | intersect(['all', 'create', 'pub1', 'pub2', 'pub3']) | length == 0) else '' }}
+          {{ '--override ' + override_users if override_users | default('') else '' }}
         chdir: "{{ playbook_dir }}"
       changed_when: true
       register: fetch_result
@@ -53,7 +56,7 @@
 
     - name: "⚠ USERNAME CONFLICTS — resolve these manually in the sheet before re-running"
       ansible.builtin.debug:
-        msg: "Row {{ item.sheet_row }}: '{{ item.username }}' ({{ item.full_name }}) — already exists on {{ item.source }}"
+        msg: "Row {{ item.sheet_row }}: '{{ item.username }}' ({{ item.full_name }}) — already exists on {{ item.source }}{{ ' (originally row ' + item.original_row | string + ')' if item.original_row is defined else '' }}"
       loop: "{{ conflicts | default([]) }}"
       loop_control:
         label: "{{ item.username }}"
@@ -201,7 +204,7 @@
   tasks:
     - name: Email credentials to each new user
       ansible.builtin.command:
-        cmd: /opt/homebrew/Cellar/ansible/13.6.0_1/libexec/bin/python fetch_sheet_users.py --mode send-emails
+        cmd: "{{ ansible_playbook_python }} fetch_sheet_users.py --mode send-emails"
         chdir: "{{ playbook_dir }}"
       changed_when: true
 
@@ -214,6 +217,6 @@
   tasks:
     - name: Mark created rows as italic in sheet
       ansible.builtin.command:
-        cmd: /opt/homebrew/Cellar/ansible/13.6.0_1/libexec/bin/python fetch_sheet_users.py --mode mark-done
+        cmd: "{{ ansible_playbook_python }} fetch_sheet_users.py --mode mark-done"
         chdir: "{{ playbook_dir }}"
       changed_when: true
