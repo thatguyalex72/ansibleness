@@ -1,0 +1,92 @@
+---
+# DESCRIPTION
+# Check whether each network interface's IP is assigned statically or via DHCP.
+# Checks (in order): netplan, NetworkManager, /etc/network/interfaces
+# Author: Alex
+
+- name: Check IP Assignment Method (Static vs DHCP)
+  hosts: linux
+  gather_facts: yes
+  become: no
+
+  tasks:
+
+  - block:
+
+    - name: Check for netplan config files
+      find:
+        paths: /etc/netplan
+        patterns: "*.yaml,*.yml"
+      register: netplan_files
+
+    - name: Read netplan configs
+      slurp:
+        src: "{{ item.path }}"
+      loop: "{{ netplan_files.files }}"
+      register: netplan_contents
+      failed_when: false
+      when: netplan_files.files | length > 0
+
+    - name: Check nmcli availability
+      command: which nmcli
+      register: nmcli_check
+      changed_when: false
+      failed_when: false
+
+    - name: Get NetworkManager connection details
+      command: nmcli -t -f NAME,TYPE,DEVICE,ipv4.method con show
+      register: nmcli_output
+      changed_when: false
+      when: nmcli_check.rc == 0
+
+    - name: Read /etc/network/interfaces
+      slurp:
+        src: /etc/network/interfaces
+      register: interfaces_file
+      failed_when: false
+
+    - name: Report - netplan assignment methods
+      debug:
+        msg: >-
+          [NETPLAN] {{ item.item.path | basename }}:
+          {% set content = item.content | b64decode %}
+          {% if 'dhcp4: true' in content %}DHCP{% elif 'dhcp4: false' in content or 'addresses:' in content %}STATIC{% else %}UNKNOWN (check manually){% endif %}
+      loop: "{{ netplan_contents.results }}"
+      loop_control:
+        label: "{{ item.item.path | basename }}"
+      when:
+        - netplan_files.files | length > 0
+        - netplan_contents is defined
+
+    - name: Report - NetworkManager assignment methods
+      debug:
+        msg: >-
+          [NETWORKMANAGER]
+          {% for line in nmcli_output.stdout_lines %}
+          {{ line }}
+          {% endfor %}
+      when:
+        - nmcli_check.rc == 0
+        - nmcli_output.stdout != ""
+
+    - name: Report - /etc/network/interfaces assignment methods
+      debug:
+        msg: >-
+          [INTERFACES FILE]
+          {% set content = interfaces_file.content | b64decode %}
+          {% for line in content.split('\n') %}
+          {% if 'iface' in line %}{{ line }} {% endif %}
+          {% endfor %}
+      when:
+        - interfaces_file.content is defined
+
+    - name: Report - active interface IPs from facts
+      debug:
+        msg: >-
+          [ACTIVE INTERFACES]
+          {% for iface in ansible_interfaces %}
+          {% set iface_data = hostvars[inventory_hostname]['ansible_' + iface | replace('-', '_')] | default({}) %}
+          {% if iface_data.ipv4 is defined %}
+          {{ iface }}: {{ iface_data.ipv4.address }}/{{ iface_data.ipv4.netmask }}
+          {% endif %}
+          {% endfor %}

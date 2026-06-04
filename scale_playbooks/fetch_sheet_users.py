@@ -461,6 +461,7 @@ def send_emails():
     sent = 0
     skipped = 0
     dup_sent = 0
+    sent_emails = []
 
     with smtplib.SMTP("smtp.gmail.com", 587) as smtp:
         smtp.starttls()
@@ -492,6 +493,7 @@ def send_emails():
             smtp.sendmail(GMAIL_ADDRESS, recipients, msg.as_string())
             print(f"  sent to {user['username']} <{to_email}>"
                   + (f" cc: {cc_email}" if cc_email and "@" in cc_email else ""))
+            sent_emails.append(to_email)
             sent += 1
 
         for dup in duplicates:
@@ -516,6 +518,10 @@ def send_emails():
     print(f"Welcome emails sent: {sent}" + (f" ({skipped} skipped — no email in sheet)" if skipped else ""))
     if dup_sent:
         print(f"Duplicate notifications sent: {dup_sent}")
+    if sent_emails:
+        print("\n--- Fleet Manager invite list ---")
+        print("\n".join(sent_emails))
+        print("---------------------------------")
 
 
 def mark_done(service, num_cols=None):
