@@ -16,14 +16,23 @@
     SC_PASSWORD: "{{ sc_password }}"
 
   tasks:
+    - name: Get all VMs from cluster
+      scale_computing.hypercore.vm_info:
+      register: all_vms
+
+    - name: Resolve target VM names (case-insensitive)
+      ansible.builtin.set_fact:
+        target_vms: >-
+          {{ all_vms.records
+             | map(attribute='vm_name')
+             | select('match', '(?i)^(DC02|DC03|USP-S-FINANCE-clone)$')
+             | list }}
+
     - name: Power off demo VMs
       scale_computing.hypercore.vm_params:
         vm_name: "{{ item }}"
         power_state: stop
-      loop:
-        - DC02
-        - DC03
-        - USP-S-FINANCE-clone
+      loop: "{{ target_vms }}"
       ignore_errors: true
 
     - name: Wait for power-off to settle
@@ -34,10 +43,7 @@
       scale_computing.hypercore.vm:
         vm_name: "{{ item }}"
         state: absent
-      loop:
-        - DC02
-        - DC03
-        - USP-S-FINANCE-clone
+      loop: "{{ target_vms }}"
       ignore_errors: true
       register: delete_result
 
@@ -45,6 +51,6 @@
       ansible.builtin.debug:
         msg: |
           Cleanup complete on US-Otava:
-          - DC02: {{ 'deleted' if not delete_result.results[0].failed else 'not found / skipped' }}
-          - DC03: {{ 'deleted' if not delete_result.results[1].failed else 'not found / skipped' }}
-          - USP-S-FINANCE-clone: {{ 'deleted' if not delete_result.results[2].failed else 'not found / skipped' }}
+          {% for r in delete_result.results %}
+          - {{ r.item }}: {{ 'deleted' if r.changed else 'not found / skipped' }}
+          {% endfor %}

@@ -10,10 +10,29 @@
 #
 # PREREQUISITES:
 #   1. Set GSHEET_SERVICE_ACCOUNT_FILE and GSHEET_SPREADSHEET_ID env vars.
-#   2. pip install google-api-python-client google-auth pyyaml
-#   3. Service account must have Editor access to the Google Sheet.
+#   2. Service account must have Editor access to the Google Sheet.
 #
 # CLUSTER TAGS: pub1, pub2, pub3
+
+# =============================================================================
+- name: Ensure Python dependencies are installed
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tags: [always]
+  tasks:
+    - name: Check for google-api-python-client
+      ansible.builtin.command:
+        cmd: "{{ ansible_playbook_python }} -c 'import google.oauth2.service_account'"
+      register: google_check
+      changed_when: false
+      failed_when: false
+
+    - name: Install google-api-python-client and google-auth
+      ansible.builtin.command:
+        cmd: "{{ ansible_playbook_python }} -m pip install google-api-python-client google-auth"
+      when: google_check.rc != 0
+      changed_when: true
 
 # =============================================================================
 - name: Fetch users from Google Sheet
