@@ -34,10 +34,12 @@
         power_state: stop
       loop: "{{ target_vms }}"
       ignore_errors: true
+      async: 120
+      poll: 5
 
     - name: Wait for power-off to settle
       ansible.builtin.pause:
-        seconds: 5
+        seconds: 10
 
     - name: Delete demo VMs
       scale_computing.hypercore.vm:
@@ -46,11 +48,13 @@
       loop: "{{ target_vms }}"
       ignore_errors: true
       register: delete_result
+      async: 120
+      poll: 5
 
     - name: Cleanup summary
       ansible.builtin.debug:
         msg: |
           Cleanup complete on US-Otava:
           {% for r in delete_result.results %}
-          - {{ r.item }}: {{ 'deleted' if r.changed else 'not found / skipped' }}
+          - {{ r.item }}: {{ 'deleted' if r.changed else 'FAILED: ' + r.msg if r.failed else 'not found / skipped' }}
           {% endfor %}
