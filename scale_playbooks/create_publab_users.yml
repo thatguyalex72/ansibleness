@@ -159,6 +159,7 @@
           - "VM Create/Edit"
           - "VM Delete"
           - "VM Power Controls"
+          - "Media Management"
         state: present
       loop: "{{ users }}"
       loop_control:
@@ -199,6 +200,7 @@
           - "VM Create/Edit"
           - "VM Delete"
           - "VM Power Controls"
+          - "Media Management"
         state: present
       loop: "{{ users }}"
       loop_control:
