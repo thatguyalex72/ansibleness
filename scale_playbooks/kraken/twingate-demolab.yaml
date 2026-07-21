@@ -129,7 +129,7 @@ spec:
                 sudo: ALL=(ALL) NOPASSWD:ALL
                 lock_passwd: false
                 ssh_authorized_keys:
-                  - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCoaxgy9rm/x5xC1kzOQaYTZIumDVG6FuW2djiDGXXOs0dCEL0RB/bMkf5CGJe/517+GNP2jnBTyIlAHyLYMwtXz4s2t2eD1I+SyJfnV5FdgInLgUc4P38RmYty/ClIHI2JXHLeVHG90XZEXcK1FPIrYX0La/nUWwvcZ24qj/XxlvWrjamFgLyHEw3Omcrus5yXz+40meP4Bdxk4PtkJxT4XflkpHQr1ETc0YkAGw+2Dxp91gbO8mYQeG9rUMGswf5zgGs+a6z+ti9qV/E/U1Il6aZgBzQJPO9688NaJa+f0NZpvhVY6b9mD6viZd0RQE+irRCYKGEuT/4ji24Ahy39 anicholson@AN.local
+                  - ssh-rsa 
 
             # Fill in locally, do NOT commit a real value here (plaintext).
             # Prefer a pre-hashed password (e.g. `mkpasswd --method=SHA-512`)
