@@ -1,19 +1,20 @@
 ---
-# Shuts down and deletes demo VMs on US-Otava after a demo session.
+# Shuts down and deletes demo VMs on SA2-3650DF after a demo session.
 #
 # USAGE:
 #   source ~/.scale_env && ansible-playbook -i scale_playbooks/inventory_with_clusters \
 #     scale_playbooks/cleanup_demo_vms.yml
 
-- name: Shutdown and delete demo VMs from US-Otava
-  hosts: US_Otava_node1
+- name: Shutdown and delete demo VMs from SA2
+  hosts: SA2_node1
   connection: local
   gather_facts: false
 
   environment:
-    SC_HOST: "https://10.8.12.10"
+    SC_HOST: "https://10.8.12.26"
     SC_USERNAME: "{{ sc_username }}"
     SC_PASSWORD: "{{ sc_password }}"
+    SC_TIMEOUT: "45"
 
   tasks:
     - name: Get all VMs from cluster
@@ -54,7 +55,7 @@
     - name: Cleanup summary
       ansible.builtin.debug:
         msg: |
-          Cleanup complete on US-Otava:
+          Cleanup complete on SA2:
           {% for r in delete_result.results %}
           - {{ r.item }}: {{ 'deleted' if r.changed else 'FAILED: ' + r.msg if r.failed else 'not found / skipped' }}
           {% endfor %}

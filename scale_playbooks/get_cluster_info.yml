@@ -3,17 +3,18 @@
 # endpoints. Used to inspect available fields for metrics playbooks.
 #
 # USAGE:
-#   ansible-playbook get_cluster_info.yml --tags otava
+#   ansible-playbook get_cluster_info.yml --tags sa2
 
-- name: Get Cluster Info - US-Otava
-  hosts: US_Otava_node1
+- name: Get Cluster Info - SA2-3650DF
+  hosts: SA2_node1
   connection: local
   gather_facts: false
-  tags: [otava, demolab]
+  tags: [sa2, demolab]
   environment:
-    SC_HOST: "https://10.8.12.10"
+    SC_HOST: "https://10.8.12.26"
     SC_USERNAME: "{{ sc_username }}"
     SC_PASSWORD: "{{ sc_password }}"
+    SC_TIMEOUT: "45"
   tasks:
     - name: Get node info
       scale_computing.hypercore.node_info:
@@ -36,11 +37,12 @@
 
     - name: Get raw Node data via REST API
       ansible.builtin.uri:
-        url: "https://10.8.12.10/rest/v1/Node"
+        url: "https://10.8.12.26/rest/v1/Node"
         url_username: "{{ sc_username }}"
         url_password: "{{ sc_password }}"
         validate_certs: false
         force_basic_auth: true
+        timeout: 45
       register: raw_nodes
 
     - name: Raw REST node response
@@ -49,11 +51,12 @@
 
     - name: Get raw Cluster data via REST API
       ansible.builtin.uri:
-        url: "https://10.8.12.10/rest/v1/Cluster"
+        url: "https://10.8.12.26/rest/v1/Cluster"
         url_username: "{{ sc_username }}"
         url_password: "{{ sc_password }}"
         validate_certs: false
         force_basic_auth: true
+        timeout: 45
       register: raw_cluster
 
     - name: Raw REST cluster response
