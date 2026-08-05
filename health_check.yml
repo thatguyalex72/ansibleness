@@ -1,0 +1,191 @@
+---
+# DESCRIPTION
+# Read-only health check across the Linux fleet. Written after the SA2 migration
+# surfaced a VM restored from a ~3-year-old snapshot (twingate-demolab1), to find
+# any others carrying the same class of problem.
+#
+# Makes NO changes and needs NO sudo - safe to run at any time.
+#
+# Flags raised:
+#   SNAPSHOT?   large gap in boot history - filesystem predates the current boot
+#   DUP-MACHINE-ID  machine-id shared with another host (clone not generalised;
+#                   causes duplicate DHCP leases - see se-utilities.yaml)
+#   REBOOT      /var/run/reboot-required present
+#   FAILED      failed systemd units
+#   NTP         clock not synchronised
+#   DNS-REPO    an apt repo hostname no longer resolves (dead upstream)
+#   DISK        root filesystem over 85%
+#   HWE-DRIFT   kernel major differs from the fleet majority
+
+# Usage:
+#   ansible-playbook health_check.yml
+#   ansible-playbook health_check.yml -e target=twingate
+#   ansible-playbook health_check.yml -e boot_gap_days=30
+
+
+- name: Linux fleet health check
+  hosts: "{{ target | default('linux') }}"
+  gather_facts: yes
+  become: no
+  any_errors_fatal: false
+
+  vars:
+    boot_gap_days: 90       # boot-history gap that counts as suspicious
+    disk_pct_warn: 85
+
+  tasks:
+
+  - name: Collect health data
+    shell: |
+      python3 - <<'PY'
+      import json, os, re, socket, subprocess, glob
+
+      def run(cmd):
+          try:
+              return subprocess.run(cmd, shell=True, capture_output=True,
+                                    text=True, timeout=30).stdout.strip()
+          except Exception:
+              return ""
+
+      d = {}
+
+      # Largest gap between consecutive boots. A machine restored from an old
+      # snapshot shows a jump from the snapshot date to the restore date.
+      import datetime
+      # A gap means the filesystem was inactive - EITHER powered off OR restored
+      # from an older snapshot. gap_to is the discriminator: a gap ending on the
+      # migration date points at a restore, not a planned shutdown.
+      boots = re.findall(r'\d{4}-\d{2}-\d{2}', run("journalctl --list-boots --no-pager"))
+      dates = sorted({datetime.date.fromisoformat(b) for b in boots})
+      gap, gfrom, gto = 0, "?", "?"
+      for a, b in zip(dates, dates[1:]):
+          if (b - a).days > gap:
+              gap, gfrom, gto = (b - a).days, str(a), str(b)
+      d["boot_gap"]   = gap
+      d["gap_from"]   = gfrom
+      d["gap_to"]     = gto
+      d["first_boot"] = str(dates[0]) if dates else "?"
+
+      d["machine_id"] = run("cat /etc/machine-id")
+      d["reboot_req"] = os.path.exists("/var/run/reboot-required")
+      d["failed"]     = run("systemctl list-units --state=failed --no-legend --plain | wc -l")
+      d["ntp"]        = run("timedatectl show -p NTPSynchronized --value")
+      # apt on Debian family, dnf on the AlmaLinux hosts
+      if os.path.exists("/usr/bin/apt"):
+          d["upgradable"] = run("apt list --upgradable 2>/dev/null | tail -n +2 | grep -c .") or "0"
+      else:
+          d["upgradable"] = run("dnf -q check-update 2>/dev/null | grep -c '^[a-zA-Z0-9]'") or "0"
+      d["disk_pct"]   = run("df --output=pcent / | tail -1 | tr -dc '0-9'")
+
+      # apt repo hostnames that no longer resolve (only *.list is read by apt)
+      hosts = set()
+      for f in glob.glob("/etc/apt/sources.list.d/*.list") + ["/etc/apt/sources.list"]:
+          try:
+              for line in open(f):
+                  m = re.match(r'\s*deb\s+(?:\[[^\]]*\]\s*)?(https?://[^/\s]+)', line)
+                  if m:
+                      hosts.add(m.group(1).split("//")[1])
+          except Exception:
+              pass
+      dead = []
+      for h in sorted(hosts):
+          try:
+              socket.getaddrinfo(h, None)
+          except Exception:
+              dead.append(h)
+      d["dead_repos"] = dead
+
+      print(json.dumps(d))
+      PY
+    args:
+      executable: /bin/bash
+    register: hc
+    changed_when: false
+    failed_when: false
+
+  - name: Parse health data
+    set_fact:
+      health: "{{ hc.stdout | from_json }}"
+    when: hc.rc == 0 and hc.stdout | length > 0
+
+  - name: Note hosts that could not be collected
+    set_fact:
+      health: {}
+    when: health is not defined
+
+  # ── Report ────────────────────────────────────────────────────────────────
+
+  - name: Build and show report
+    run_once: true
+    delegate_to: localhost
+    vars:
+      allids: "{{ ansible_play_hosts | map('extract', hostvars) | selectattr('health.machine_id', 'defined') | map(attribute='health.machine_id') | list }}"
+      # Newest Ubuntu release present - hosts behind it are the drift, and
+      # comparing kernels across distros (Ubuntu vs AlmaLinux) is meaningless.
+      newest_ubuntu: "{{ ansible_play_hosts | map('extract', hostvars) | selectattr('ansible_distribution', 'defined') | selectattr('ansible_distribution', 'equalto', 'Ubuntu') | map(attribute='ansible_distribution_version') | unique | sort | last | default('') }}"
+    debug:
+      msg: |
+        {{ '%-22s %-14s %-16s %6s %5s %5s %5s %4s' | format('HOST','OS','KERNEL','BOOTGAP','UPD','FAIL','DISK','NTP') }}
+        {{ '-' * 96 }}
+        {% for h in ansible_play_hosts %}
+        {% set hv = hostvars[h] %}
+        {% set hc = hv.health | default({}) %}
+        {% if hc %}
+        {{ '%-22s %-14s %-16s %6s %5s %5s %4s%% %4s' | format(
+             h,
+             (hv.ansible_distribution | default('?')) ~ ' ' ~ (hv.ansible_distribution_version | default('')),
+             hv.ansible_kernel | default('?'),
+             hc.boot_gap ~ 'd',
+             hc.upgradable,
+             hc.failed,
+             hc.disk_pct,
+             'ok' if hc.ntp == 'yes' else 'NO') }}
+        {% else %}
+        {{ '%-22s %s' | format(h, 'UNREACHABLE / no data') }}
+        {% endif %}
+        {% endfor %}
+
+        FLAGS
+        {{ '-' * 96 }}
+        {% set ns = namespace(any=false) %}
+        {% for h in ansible_play_hosts %}
+        {% set hv = hostvars[h] %}
+        {% set hc = hv.health | default({}) %}
+        {% if hc %}
+        {% if hc.boot_gap | int >= boot_gap_days | int %}
+        {% set ns.any = true %}
+        GAP            {{ h }}: inactive {{ hc.boot_gap }}d, {{ hc.gap_from }} -> {{ hc.gap_to }}{{ '   <-- ends at migration: LIKELY SNAPSHOT RESTORE' if hc.gap_to >= '2026-08-02' else ' (powered off? gap predates migration)' }}
+        {% endif %}
+        {% if allids | select('equalto', hc.machine_id) | list | length > 1 %}
+        {% set ns.any = true %}
+        DUP-MACHINE-ID {{ h }}: {{ hc.machine_id[:12] }}... shared with another host
+        {% endif %}
+        {% if hc.reboot_req %}
+        {% set ns.any = true %}
+        REBOOT         {{ h }}: reboot required
+        {% endif %}
+        {% if hc.failed | int > 0 %}
+        {% set ns.any = true %}
+        FAILED         {{ h }}: {{ hc.failed }} failed systemd unit(s)
+        {% endif %}
+        {% if hc.ntp != 'yes' %}
+        {% set ns.any = true %}
+        NTP            {{ h }}: clock not synchronised
+        {% endif %}
+        {% if hc.dead_repos %}
+        {% set ns.any = true %}
+        DNS-REPO       {{ h }}: unresolvable apt repo(s): {{ hc.dead_repos | join(', ') }}
+        {% endif %}
+        {% if hc.disk_pct | int >= disk_pct_warn | int %}
+        {% set ns.any = true %}
+        DISK           {{ h }}: root filesystem {{ hc.disk_pct }}% full
+        {% endif %}
+        {% if hv.ansible_distribution | default('') == 'Ubuntu' and hv.ansible_distribution_version | default('') != newest_ubuntu %}
+        {% set ns.any = true %}
+        OS-DRIFT       {{ h }}: Ubuntu {{ hv.ansible_distribution_version }} (fleet is on {{ newest_ubuntu }})
+        {% endif %}
+        {% endif %}
+        {% endfor %}
+        {% if not ns.any %}
+        (none)
+        {% endif %}

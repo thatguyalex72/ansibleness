@@ -1,0 +1,198 @@
+---
+# DESCRIPTION
+# Generate synthetic storage load with fio, managed as a systemd service so it
+# survives guest reboots and patch windows (unlike Iometer, which needs a
+# console session to restart).
+
+# Usage:
+# Install fio and lay down the job file + service (does not start it):
+#   ansible-playbook fio_load.yml --tags install
+# Start / resume the load:
+#   ansible-playbook fio_load.yml --tags start
+# Stop the load and disable it at boot:
+#   ansible-playbook fio_load.yml --tags stop
+# Show what each loader is currently doing:
+#   ansible-playbook fio_load.yml --tags status
+# Remove the service, job file and data files:
+#   ansible-playbook fio_load.yml --tags clean
+#
+# Tune at runtime without editing this file, e.g. a heavier 50/50 profile:
+#   ansible-playbook fio_load.yml --tags start -e fio_rate_iops=800 -e fio_rwmixread=50
+# Limit to a subset of loaders: add -l 'fio1,fio2'
+#
+# Target hosts live in a [fio_load] inventory group - put one small Ubuntu VM
+# per cluster node in it so every node's gauges show activity.
+
+
+- name: Manage fio synthetic storage load
+  hosts: fio_load
+
+  vars:
+    fio_dir: /var/lib/fio           # where the working-set files live
+    fio_size: 8G                    # per-job file size; keep well above cache
+    fio_bs: 8k                      # block size
+    fio_rw: randrw
+    fio_rwmixread: 70               # 70/30 read/write
+    fio_iodepth: 16
+    fio_numjobs: 2
+    fio_rate_iops: 250              # per-direction cap, per VM - steady, not pegged
+    fio_runtime: 24h
+
+  tasks:
+
+  # ── Install ───────────────────────────────────────────────────────────────
+
+  - name: Install fio
+    apt:
+      name: fio
+      state: present
+      update_cache: yes
+      cache_valid_time: 3600
+    become: yes
+    tags:
+    - install
+
+  - name: Create working directory
+    file:
+      path: "{{ fio_dir }}"
+      state: directory
+      mode: '0755'
+    become: yes
+    tags:
+    - install
+
+  # direct=1 bypasses the guest page cache, so the I/O actually reaches the
+  # cluster. refill_buffers/dedupe_percentage keep the data compressible but
+  # not deduplicable away to nothing.
+  - name: Write fio job file
+    copy:
+      dest: /etc/fio-demo-load.fio
+      mode: '0644'
+      content: |
+        [global]
+        directory={{ fio_dir }}
+        size={{ fio_size }}
+        direct=1
+        ioengine=libaio
+        bs={{ fio_bs }}
+        rw={{ fio_rw }}
+        rwmixread={{ fio_rwmixread }}
+        iodepth={{ fio_iodepth }}
+        numjobs={{ fio_numjobs }}
+        time_based=1
+        runtime={{ fio_runtime }}
+        rate_iops={{ fio_rate_iops }},{{ fio_rate_iops }}
+        refill_buffers=1
+        buffer_compress_percentage=50
+        dedupe_percentage=25
+        group_reporting=1
+
+        [demo-load]
+    become: yes
+    register: fio_job_file
+    tags:
+    - install
+    - start
+
+  - name: Install systemd unit
+    copy:
+      dest: /etc/systemd/system/fio-demo-load.service
+      mode: '0644'
+      content: |
+        [Unit]
+        Description=fio synthetic storage load (demo)
+        After=network-online.target
+
+        [Service]
+        Type=simple
+        ExecStart=/usr/bin/fio --eta=never --status-interval=60 /etc/fio-demo-load.fio
+        Restart=always
+        RestartSec=10
+
+        [Install]
+        WantedBy=multi-user.target
+    become: yes
+    register: fio_unit_file
+    tags:
+    - install
+    - start
+
+  # ── Start ─────────────────────────────────────────────────────────────────
+
+  - name: Start fio load and enable at boot
+    systemd:
+      name: fio-demo-load
+      state: "{{ 'restarted' if (fio_job_file.changed or fio_unit_file.changed) else 'started' }}"
+      enabled: yes
+      daemon_reload: yes
+    become: yes
+    tags:
+    - start
+
+  # ── Stop ──────────────────────────────────────────────────────────────────
+
+  - name: Stop fio load and disable at boot
+    systemd:
+      name: fio-demo-load
+      state: stopped
+      enabled: no
+    become: yes
+    failed_when: false
+    tags:
+    - stop
+
+  # ── Status ────────────────────────────────────────────────────────────────
+
+  - name: Check service state
+    command: systemctl is-active fio-demo-load
+    register: fio_active
+    changed_when: false
+    failed_when: false
+    tags:
+    - status
+
+  - name: Fetch latest fio throughput line
+    shell: journalctl -u fio-demo-load -n 40 --no-pager | grep -E 'IOPS=|iops' | tail -1
+    register: fio_last
+    changed_when: false
+    failed_when: false
+    become: yes
+    tags:
+    - status
+
+  - name: Show loader status
+    debug:
+      msg: "{{ fio_active.stdout }} - {{ fio_last.stdout | default('no throughput reported yet', true) }}"
+    tags:
+    - status
+
+  # ── Clean ─────────────────────────────────────────────────────────────────
+
+  - name: Stop and disable before removal
+    systemd:
+      name: fio-demo-load
+      state: stopped
+      enabled: no
+    become: yes
+    failed_when: false
+    tags:
+    - clean
+
+  - name: Remove service, job file and data
+    file:
+      path: "{{ item }}"
+      state: absent
+    loop:
+    - /etc/systemd/system/fio-demo-load.service
+    - /etc/fio-demo-load.fio
+    - "{{ fio_dir }}"
+    become: yes
+    tags:
+    - clean
+
+  - name: Reload systemd
+    systemd:
+      daemon_reload: yes
+    become: yes
+    tags:
+    - clean

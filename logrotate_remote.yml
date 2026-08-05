@@ -1,0 +1,124 @@
+---
+# DESCRIPTION
+# Add log rotation for /var/log/remote on the syslog collectors. Nothing has
+# ever rotated it - on syslog_publab it had grown to 229 GB (222 GB of that a
+# single pfsense.localdomain file) with zero compressed files, going back to
+# November 2023.
+#
+# PREREQUISITE: scale_playbooks/vm_cleanup.py must be gzip-aware before this
+# runs. It globs /var/log/remote/scale-* - which matches rotated .gz files too -
+# and reads them with errors="replace", so compressed logs would parse as zero
+# activity rather than raising. Every VM would then look inactive, and inactive
+# untagged VMs are DELETED WITH STORAGE by that script. The gzip fix is already
+# applied; the check task below refuses to proceed if it is ever reverted.
+
+# Usage:
+#   ansible-playbook logrotate_remote.yml --ask-become-pass --check
+#   ansible-playbook logrotate_remote.yml --ask-become-pass
+#   ansible-playbook logrotate_remote.yml --ask-become-pass -e retain_days=180
+#
+# After deploying, compress the existing backlog once (not done here - it
+# rewrites 222 GB and should be run deliberately, off-hours):
+#   sudo find /var/log/remote -type f ! -name '*.gz' -size +100M -exec gzip {} \;
+
+
+- name: Rotate /var/log/remote on the syslog collectors
+  hosts: "{{ target | default('syslog') }}"
+  become: yes
+
+  vars:
+    retain_days: 90       # must stay comfortably above vm_cleanup.py's 30-day cutoff
+    cleanup_script: /home/alex/vm_cleanup.py
+
+  tasks:
+
+  - name: Check whether this host actually collects remote logs
+    stat:
+      path: /var/log/remote
+    register: remote_dir
+
+  - name: Skip hosts without /var/log/remote
+    debug:
+      msg: "no /var/log/remote here - nothing to rotate"
+    when: not remote_dir.stat.exists
+
+  # ── Safety interlock ──────────────────────────────────────────────────────
+
+  - name: Look for vm_cleanup.py on this host
+    stat:
+      path: "{{ cleanup_script }}"
+    register: cleanup_present
+    when: remote_dir.stat.exists
+
+  - name: Confirm vm_cleanup.py reads gzipped logs AND searches the archive dir
+    shell: |
+      grep -q 'gzip.open if log_file.endswith' {{ cleanup_script }} \
+        && grep -q 'syslog_dir + "-archive"' {{ cleanup_script }}
+    register: gzip_aware
+    changed_when: false
+    failed_when: false
+    when: remote_dir.stat.exists and cleanup_present.stat.exists
+
+  # Compressing scale-* while the cleanup script cannot read gzip makes every VM
+  # look inactive, which powers off tagged VMs and deletes untagged ones.
+  - name: Refuse to enable compression if the cleanup script is not gzip-aware
+    assert:
+      that: gzip_aware.rc == 0
+      fail_msg: >-
+        {{ cleanup_script }} on this host still reads logs with plain open().
+        Enabling compression would make it see zero VM activity and DELETE
+        untagged VMs. Apply the gzip fix from
+        scale_playbooks/vm_cleanup.py first.
+    when: remote_dir.stat.exists and cleanup_present.stat.exists
+
+  # ── Rotation ──────────────────────────────────────────────────────────────
+
+  # olddir keeps rotated files out of /var/log/remote so the wildcard cannot
+  # re-rotate its own archives. rsyslog is HUPed rather than the logs being
+  # copied, so rotating a 222 GB file is a rename, not a 222 GB copy.
+  - name: Install logrotate config for /var/log/remote
+    copy:
+      dest: /etc/logrotate.d/remote-syslog
+      mode: '0644'
+      backup: yes
+      content: |
+        /var/log/remote/* {
+            daily
+            rotate {{ retain_days }}
+            olddir /var/log/remote-archive
+            createolddir
+            compress
+            delaycompress
+            missingok
+            notifempty
+            nocreate
+            sharedscripts
+            postrotate
+                /usr/lib/rsyslog/rsyslog-rotate
+            endscript
+        }
+    when: remote_dir.stat.exists
+    register: lr_config
+
+  - name: Validate the config with logrotate --debug
+    command: logrotate --debug /etc/logrotate.d/remote-syslog
+    register: lr_debug
+    changed_when: false
+    failed_when: lr_debug.rc != 0
+    when: remote_dir.stat.exists
+
+  - name: Show what logrotate would do
+    debug:
+      msg: "{{ lr_debug.stdout_lines | select('search', 'rotating|considering|olddir') | list | head(12) }}"
+    when: remote_dir.stat.exists
+
+  - name: Report current size
+    shell: du -sh /var/log/remote 2>/dev/null | cut -f1
+    register: sz
+    changed_when: false
+    when: remote_dir.stat.exists
+
+  - name: Summary
+    debug:
+      msg: "rotation installed - /var/log/remote is {{ sz.stdout }}, retaining {{ retain_days }} days, archives in /var/log/remote-archive"
+    when: remote_dir.stat.exists

@@ -17,10 +17,6 @@ wazuh_demolab ansible_host=10.8.12.44
 syslog_publab ansible_host=10.5.11.222
 wazuh_publab ansible_host=10.5.11.89
 
-[leo]
-leo_gateway ansible_host=10.5.11.54
-leo_broker ansible_host=10.5.11.49
-
 [misc_demolab]
 zabby_demolab ansible_host=10.8.12.50
 authentik_demo ansible_host=10.8.12.49
@@ -33,6 +29,18 @@ dvwa ansible_host=10.8.12.51
 
 [shoresy]
 dadguard ansible_host=192.168.0.96
+
+# fio synthetic storage load generators on SA2 (demo lab).
+# Deployed from scale_playbooks/kraken/se-utilities.yaml, managed by fio_load.yml.
+# Included in [apt] below so they get patched with the rest of the fleet - the
+# fio load runs as a systemd service enabled at boot, so it resumes on its own
+# after a patch reboot.
+[fio_load]
+FIO1 ansible_host=10.8.12.69
+FIO2 ansible_host=10.8.12.71
+FIO3 ansible_host=10.8.12.75
+FIO4 ansible_host=10.8.12.76
+FIO5 ansible_host=10.8.12.81
 
 # === Composite groups (built from the base groups above, no host repetition) ===
 [twingate:children]
@@ -54,7 +62,6 @@ outkvm ansible_host=10.5.11.41
 [publab:children]
 twingate_publab
 logging_publab
-leo
 
 [apt]
 outkvm ansible_host=10.5.11.41
@@ -63,7 +70,7 @@ outkvm ansible_host=10.5.11.41
 twingate
 syslog
 misc_demolab
+fio_load
 
 [linux:children]
 apt
-leo

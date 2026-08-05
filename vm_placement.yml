@@ -1,0 +1,160 @@
+---
+# DESCRIPTION
+# Reports, for every VM in an inventory group: which node it is running on,
+# its preferred and backup node, and whether strict affinity is set.
+#
+# Inventory names rarely match HyperCore VM names (FIO1 in inventory is
+# se-util1 in the guest and something else again in HyperCore), so matching is
+# done on IP address - ansible_host is compared against the guest IPs HyperCore
+# reports via qemu-guest-agent. Hosts that cannot be matched are listed
+# explicitly rather than silently dropped.
+#
+# If a VM has no guest agent, or reports no IP, set hc_vm_name on that host in
+# the inventory to match by HyperCore name instead:
+#   somehost ansible_host=10.8.12.5 hc_vm_name="ScaleDemo.SomeHost"
+
+# Usage:
+#   . ~/.scale_env && ansible-playbook vm_placement.yml
+#   . ~/.scale_env && ansible-playbook vm_placement.yml -e target=fio_load
+#   . ~/.scale_env && ansible-playbook vm_placement.yml -e '{"clusters":[{"name":"SA2","host":"10.8.12.26"}]}'
+#
+# Requires SC_USERNAME and SC_PASSWORD in the environment (source ~/.scale_env).
+
+
+- name: Report VM node placement and affinity
+  hosts: localhost
+  connection: local
+  gather_facts: no
+
+  vars:
+    target: linux
+    # Add any cluster that hosts inventory VMs. Anything not listed here shows
+    # up under "not found" rather than being silently skipped.
+    clusters:
+    - { name: SA2,      host: 10.8.12.26 }
+    - { name: Otava,    host: 10.8.12.10 }
+    - { name: Maverick, host: 10.8.12.13 }
+    - { name: Goose,    host: 10.8.12.16 }
+    - { name: 3350F,    host: 10.8.12.17 }
+    - { name: PUB1,     host: 10.5.11.80 }
+    - { name: PUB2,     host: 10.5.11.110 }
+    - { name: PUB3,     host: 10.5.11.100 }
+
+    # {inventory_name: {ip: ..., hc_vm_name: ...}}
+    host_map: >-
+      {{ dict(groups[target] | zip(groups[target] | map('extract', hostvars) | map('community.general.json_query', '{ip: ansible_host, name: hc_vm_name}'))) }}
+
+  tasks:
+
+  - name: Check credentials are present
+    assert:
+      that:
+      - lookup('env', 'SC_USERNAME') | length > 0
+      - lookup('env', 'SC_PASSWORD') | length > 0
+      fail_msg: "SC_USERNAME/SC_PASSWORD not set - run '. ~/.scale_env' first."
+
+  - name: Query clusters and build placement report
+    shell: |
+      python3 - <<'PY'
+      import json, os, sys, urllib3, requests
+      urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+      USER = os.environ["SC_USERNAME"]
+      PASS = os.environ["SC_PASSWORD"]
+      clusters = json.loads('''{{ clusters | to_json }}''')
+      hosts    = json.loads('''{{ host_map | to_json }}''')
+
+      vms, nodes, unreachable, legend = [], {}, [], {}
+
+      for c in clusters:
+          base = f"https://{c['host']}/rest/v1"
+          try:
+              s = requests.Session(); s.verify = False; s.auth = (USER, PASS)
+              nd = s.get(f"{base}/Node", timeout=20).json()
+              vd = s.get(f"{base}/VirDomain", timeout=30).json()
+          except Exception as e:
+              unreachable.append(f"{c['name']} ({c['host']}): {type(e).__name__}")
+              continue
+          for n in nd:
+              nodes[n["uuid"]] = f"p{n.get('peerID','?')}"
+              legend.setdefault(c["name"], []).append(
+                  f"p{n.get('peerID','?')}={n.get('lanIP','?')}")
+          for v in vd:
+              ips = []
+              for dev in v.get("netDevs") or []:
+                  ips += dev.get("ipv4Addresses") or []
+              a = v.get("affinityStrategy") or {}
+              vms.append({
+                  "cluster": c["name"], "name": v.get("name", ""),
+                  "state": v.get("state", ""),
+                  # nodeUUID is empty while a VM is stopped; fall back to where
+                  # it last ran so the column is still informative.
+                  "node": v.get("nodeUUID") or v.get("lastSeenRunningOnNodeUUID") or "",
+                  "running": bool(v.get("nodeUUID")),
+                  "strict": a.get("strictAffinity", False),
+                  "pref": a.get("preferredNodeUUID", ""),
+                  "backup": a.get("backupNodeUUID", ""),
+                  "ips": [i for i in ips if i],
+              })
+
+      # Short labels keep the table under terminal width; the legend below
+      # maps peer -> IP so nothing is lost.
+      def nodename(uuid, running=True):
+          if not uuid:
+              return "-"
+          label = nodes.get(uuid, uuid[:6])
+          return label if running else label + "*"
+
+      rows, missing = [], []
+      for inv in sorted(hosts):
+          want_ip   = (hosts[inv] or {}).get("ip")
+          want_name = (hosts[inv] or {}).get("name")
+          hit = None
+          if want_name:
+              hit = next((v for v in vms if v["name"] == want_name), None)
+          if not hit and want_ip:
+              hit = next((v for v in vms if want_ip in v["ips"]), None)
+          if not hit:
+              missing.append(f"{inv} ({want_ip or 'no ansible_host'})")
+              continue
+          rows.append((inv, hit["name"], hit["cluster"], hit["state"],
+                       nodename(hit["node"], hit["running"]),
+                       nodename(hit["pref"]), nodename(hit["backup"]),
+                       "YES" if hit["strict"] else "no"))
+
+      for cname, peers in sorted(legend.items()):
+          print(f"{cname}: " + "  ".join(sorted(set(peers))))
+      print()
+      w = "{:<14} {:<22} {:<7} {:<8} {:>5} {:>5} {:>7} {:>7}"
+      print(w.format("INVENTORY", "HYPERCORE VM", "CLUSTER", "STATE",
+                     "RUN", "PREF", "BACKUP", "STRICT"))
+      print("-" * 82)
+      for r in rows:
+          print(w.format(*r))
+
+      print("\n(* = VM not running; shows the node it last ran on)" if any(
+          r[4].endswith("*") for r in rows) else "", end="")
+
+      if missing:
+          print("\nNOT MATCHED (no HyperCore VM with that IP - no guest agent, "
+                "wrong cluster, or set hc_vm_name):")
+          for m in missing:
+              print("  " + m)
+      if unreachable:
+          print("\nCLUSTERS UNREACHABLE (VMs on these cannot be reported):")
+          for u in unreachable:
+              print("  " + u)
+      print(f"\n{len(rows)} matched, {len(missing)} unmatched, "
+            f"{len(vms)} VMs seen across {len(clusters) - len(unreachable)} cluster(s)")
+      PY
+    args:
+      executable: /bin/bash
+    environment:
+      SC_USERNAME: "{{ lookup('env', 'SC_USERNAME') }}"
+      SC_PASSWORD: "{{ lookup('env', 'SC_PASSWORD') }}"
+    register: placement
+    changed_when: false
+
+  - name: Show report
+    debug:
+      msg: "{{ placement.stdout_lines }}"

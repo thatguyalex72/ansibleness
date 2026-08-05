@@ -27,6 +27,28 @@
   hosts: win
   gather_facts: no
 
+  # On a macOS controller, Ansible forks a worker per host and the winrm
+  # connection plugin pulls in _scproxy/CoreFoundation, which the Obj-C runtime
+  # refuses to initialise in a fork child. The worker dies with SIGABRT and
+  # Ansible reports only "A worker was found in a dead state" alongside a crash
+  # report. Fail with something readable instead.
+  pre_tasks:
+  - name: Fail fast if the macOS fork-safety workaround is missing
+    assert:
+      that: lookup('env', 'OBJC_DISABLE_INITIALIZE_FORK_SAFETY') | length > 0
+      fail_msg: |
+        OBJC_DISABLE_INITIALIZE_FORK_SAFETY is not set in this shell.
+        Without it every worker crashes on macOS ("A worker was found in a dead state").
+        Add to ~/.bashrc (VS Code terminals are non-login bash, so .bash_profile is NOT read):
+          export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES
+        then open a new terminal. One-off workaround:
+          OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES ansible-playbook ...
+      success_msg: "fork-safety workaround present"
+    delegate_to: localhost
+    run_once: true
+    when: lookup('pipe', 'uname') == 'Darwin'
+    tags: [always]
+
   tasks:
 
   # ── Check / List ──────────────────────────────────────────────────────────

@@ -1,7 +1,19 @@
 ---
  - name: Get Service State
-   hosts: win 
+   hosts: win
    gather_facts: no
+
+   # See apply_windows_updates.yml - winrm + fork() on macOS kills the workers.
+   pre_tasks:
+   - name: Fail fast if the macOS fork-safety workaround is missing
+     assert:
+       that: lookup('env', 'OBJC_DISABLE_INITIALIZE_FORK_SAFETY') | length > 0
+       fail_msg: "OBJC_DISABLE_INITIALIZE_FORK_SAFETY is not set - add it to ~/.bashrc and open a new terminal."
+     delegate_to: localhost
+     run_once: true
+     when: lookup('pipe', 'uname') == 'Darwin'
+     tags: [always]
+
    tasks:
    - name: Get Service Facts
      ansible.windows.win_service_info:

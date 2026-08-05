@@ -21,6 +21,7 @@ Cron (on 10.5.11.222, server timezone must be America/New_York):
 import os
 import re
 import glob
+import gzip
 import time
 import smtplib
 import argparse
@@ -207,9 +208,18 @@ def parse_syslog(syslog_dir, days):
     activity = {}
     seen     = set()    # each line appears twice in syslog due to cluster replication
 
-    for log_file in sorted(glob.glob(os.path.join(syslog_dir, "scale-*"))):
+    # Logrotate moves rotated logs into <syslog_dir>-archive and gzips them, so
+    # search both locations and open .gz transparently. Getting either wrong
+    # makes VMs look inactive rather than raising an error - and inactive
+    # untagged VMs get deleted with storage.
+    log_files = sorted(
+        glob.glob(os.path.join(syslog_dir, "scale-*"))
+        + glob.glob(os.path.join(syslog_dir + "-archive", "scale-*"))
+    )
+    for log_file in log_files:
         try:
-            with open(log_file, "r", errors="replace") as fh:
+            opener = gzip.open if log_file.endswith(".gz") else open
+            with opener(log_file, "rt", errors="replace") as fh:
                 for raw in fh:
                     line = raw.strip()
                     if line in seen:

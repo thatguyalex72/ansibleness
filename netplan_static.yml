@@ -1,0 +1,218 @@
+---
+# DESCRIPTION
+# Convert a DHCP-assigned address to a static netplan config.
+#
+# By default this "freezes" the address the host currently holds, so nothing
+# changes on the wire and the SSH session survives the switch. To move a host
+# to a different address, set static_ip for it (see below).
+#
+# IMPORTANT: if the address sits inside the DHCP scope, the DHCP server does
+# not know it is now statically claimed and may lease it to another host once
+# the original lease expires. Either use addresses outside the pool, or add a
+# reservation. Freezing an in-pool lease is only safe short term.
+
+# Usage:
+# Preview what each host would be pinned to (no changes):
+#   ansible-playbook netplan_static.yml --tags check -l fio_load
+# Freeze current DHCP addresses as static:
+#   ansible-playbook netplan_static.yml --tags apply -l fio_load
+# Move a host to a specific address (outside the DHCP pool, preferred):
+#   ansible-playbook netplan_static.yml --tags apply -l se-util1 -e static_ip=10.8.12.151
+# Revert to DHCP:
+#   ansible-playbook netplan_static.yml --tags revert -l fio_load
+#
+# Per-host addresses are better set as host_vars/inventory vars, e.g.
+#   se-util1 ansible_host=10.8.12.151 static_ip=10.8.12.151
+
+
+- name: Convert DHCP addresses to static netplan config
+  # Defaults to the fio_load group so a forgotten -l cannot rewrite the
+  # networking of every host in the inventory. Override deliberately:
+  #   -e target=some_other_group
+  hosts: "{{ target | default('fio_load') }}"
+  gather_facts: yes
+
+  vars:
+    # Default to whatever the host currently has - override to relocate.
+    static_ip: "{{ ansible_default_ipv4.address }}"
+    static_prefix: "{{ ansible_default_ipv4.prefix }}"
+    static_gateway: "{{ ansible_default_ipv4.gateway }}"
+    static_iface: "{{ ansible_default_ipv4.interface }}"
+    netplan_file: /etc/netplan/99-static.yaml
+
+  tasks:
+
+  # ── Discover current settings ─────────────────────────────────────────────
+
+  # ansible_dns often reports 127.0.0.53 on systemd-resolved hosts, which is
+  # useless as an upstream resolver - ask resolved for the real ones instead.
+  - name: Get upstream DNS servers from systemd-resolved
+    command: "resolvectl dns {{ static_iface }}"
+    register: resolvectl_dns
+    changed_when: false
+    failed_when: false
+    tags:
+    - check
+    - apply
+
+  - name: Determine DNS servers to pin
+    set_fact:
+      static_dns: >-
+        {{ (resolvectl_dns.stdout | default('') | regex_findall('\d+\.\d+\.\d+\.\d+'))
+           if (resolvectl_dns.rc | default(1)) == 0 and (resolvectl_dns.stdout | default('') | regex_findall('\d+\.\d+\.\d+\.\d+')) | length > 0
+           else (ansible_dns.nameservers | default([]) | reject('match', '^127\.') | list) }}
+    tags:
+    - check
+    - apply
+
+  - name: Show planned static configuration
+    debug:
+      msg: >-
+        {{ static_iface }} -> {{ static_ip }}/{{ static_prefix }}
+        gw={{ static_gateway }} dns={{ static_dns | join(',') }}
+        {{ '(unchanged - freezing current lease)' if static_ip == ansible_default_ipv4.address else '(RELOCATING from ' + ansible_default_ipv4.address + ')' }}
+    tags:
+    - check
+    - apply
+
+  - name: Fail if anything essential is missing
+    assert:
+      that:
+      - static_ip | length > 0
+      - static_prefix | string | length > 0
+      - static_gateway | length > 0
+      - static_dns | length > 0
+      fail_msg: "Could not determine a complete network config - set static_ip/static_gateway/static_dns explicitly."
+    tags:
+    - check
+    - apply
+
+  # ── Apply ─────────────────────────────────────────────────────────────────
+
+  # cloud-init rewrites /etc/netplan/50-cloud-init.yaml on every boot and would
+  # otherwise revert this on the next reboot.
+  - name: Disable cloud-init network management
+    copy:
+      dest: /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg
+      mode: '0644'
+      content: |
+        network: {config: disabled}
+    become: yes
+    tags:
+    - apply
+
+  - name: Write static netplan config
+    copy:
+      dest: "{{ netplan_file }}"
+      mode: '0600'
+      content: |
+        network:
+          version: 2
+          ethernets:
+            {{ static_iface }}:
+              dhcp4: false
+              addresses:
+                - {{ static_ip }}/{{ static_prefix }}
+              routes:
+                - to: default
+                  via: {{ static_gateway }}
+              nameservers:
+                addresses: [{{ static_dns | join(', ') }}]
+    become: yes
+    register: netplan_written
+    tags:
+    - apply
+
+  - name: Remove cloud-init's DHCP netplan config
+    file:
+      path: /etc/netplan/50-cloud-init.yaml
+      state: absent
+    become: yes
+    tags:
+    - apply
+
+  - name: Validate netplan config
+    command: netplan generate
+    become: yes
+    changed_when: false
+    tags:
+    - apply
+
+  # Fire-and-forget: applying a network change can briefly drop the SSH
+  # connection even when the address is unchanged.
+  - name: Apply netplan
+    command: netplan apply
+    become: yes
+    async: 60
+    poll: 0
+    when: netplan_written.changed
+    tags:
+    - apply
+
+  - name: Wait for host to come back
+    wait_for_connection:
+      delay: 5
+      timeout: 120
+    when: netplan_written.changed
+    tags:
+    - apply
+
+  - name: Confirm address after apply
+    setup:
+      filter: ansible_default_ipv4
+    register: post_facts
+    tags:
+    - apply
+
+  - name: Show result
+    debug:
+      msg: "now {{ post_facts.ansible_facts.ansible_default_ipv4.address }}/{{ post_facts.ansible_facts.ansible_default_ipv4.prefix }} via {{ post_facts.ansible_facts.ansible_default_ipv4.gateway }}"
+    tags:
+    - apply
+
+  # ── Revert to DHCP ────────────────────────────────────────────────────────
+
+  - name: Re-enable cloud-init network management
+    file:
+      path: /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg
+      state: absent
+    become: yes
+    tags:
+    - revert
+
+  - name: Remove static netplan config
+    file:
+      path: "{{ netplan_file }}"
+      state: absent
+    become: yes
+    tags:
+    - revert
+
+  - name: Restore DHCP netplan config
+    copy:
+      dest: /etc/netplan/50-cloud-init.yaml
+      mode: '0600'
+      content: |
+        network:
+          version: 2
+          ethernets:
+            {{ static_iface }}:
+              dhcp4: true
+    become: yes
+    tags:
+    - revert
+
+  - name: Apply netplan (revert)
+    command: netplan apply
+    become: yes
+    async: 60
+    poll: 0
+    tags:
+    - revert
+
+  - name: Wait for host to come back after revert
+    wait_for_connection:
+      delay: 5
+      timeout: 120
+    tags:
+    - revert

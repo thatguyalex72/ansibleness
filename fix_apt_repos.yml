@@ -1,0 +1,171 @@
+---
+# DESCRIPTION
+# Repairs the third-party apt repos found broken after the SA2 migration.
+#
+#   twingate  - import the real signing key and switch to signed-by. The repo
+#               was configured [trusted=yes], which disables signature checking
+#               entirely - that is why NO_PUBKEY was only a warning. Applies to
+#               every Twingate host.
+#   salt      - repo.saltproject.io is dead upstream (dangling CNAME; the
+#               CloudFront distribution was deleted). Repoint at Broadcom's
+#               Artifactory, which took over Salt distribution.
+#   puppet    - vestigial: puppet8-release is installed but puppet-agent is not,
+#               the signing key has expired, and it is a focal repo on a jammy
+#               host. Remove it.
+#
+# Salt and Puppet only exist on twingate_demolab1 (restored from a Nov-2023
+# snapshot during the migration). Twingate applies fleet-wide.
+
+# Usage:
+#   ansible-playbook fix_apt_repos.yml --ask-become-pass
+#   ansible-playbook fix_apt_repos.yml --ask-become-pass --tags twingate
+#   ansible-playbook fix_apt_repos.yml --ask-become-pass --check    # dry run
+#
+# Existing .list files are backed up before being replaced.
+
+
+- name: Fix Twingate repo signing across all Twingate hosts
+  hosts: "{{ twingate_target | default('twingate') }}"
+  become: yes
+
+  tasks:
+
+  - name: Ensure keyring directory exists
+    file:
+      path: /etc/apt/keyrings
+      state: directory
+      mode: '0755'
+    tags:
+    - twingate
+
+  # apt accepts an ASCII-armoured key directly when it is named .asc, so there
+  # is no need to dearmour it with gpg.
+  - name: Fetch Twingate signing key (5C363F09A9174A9E)
+    get_url:
+      url: https://packages.twingate.com/apt/gpg.key
+      dest: /etc/apt/keyrings/twingate.asc
+      mode: '0644'
+    tags:
+    - twingate
+
+  - name: Point Twingate repo at the key instead of trusting it blindly
+    copy:
+      dest: /etc/apt/sources.list.d/twingate.list
+      mode: '0644'
+      backup: yes
+      content: |
+        deb [signed-by=/etc/apt/keyrings/twingate.asc] https://packages.twingate.com/apt/ /
+    register: tg_repo
+    tags:
+    - twingate
+
+
+- name: Repair Salt and Puppet repos on the restored host
+  hosts: "{{ legacy_target | default('twingate_demolab1') }}"
+  become: yes
+
+  tasks:
+
+  # ── Salt: repoint to Broadcom ─────────────────────────────────────────────
+
+  - name: Check whether Salt is actually in use
+    command: systemctl is-enabled salt-minion
+    register: salt_enabled
+    changed_when: false
+    failed_when: false
+    tags:
+    - salt
+
+  - name: Fetch Salt signing key from Broadcom
+    get_url:
+      url: https://packages.broadcom.com/artifactory/api/security/keypair/SaltProjectKey/public
+      dest: /etc/apt/keyrings/salt.asc
+      mode: '0644'
+    when: salt_enabled.rc == 0
+    tags:
+    - salt
+
+  - name: Repoint Salt repo at Broadcom Artifactory
+    copy:
+      dest: /etc/apt/sources.list.d/salt.list
+      mode: '0644'
+      backup: yes
+      content: |
+        deb [signed-by=/etc/apt/keyrings/salt.asc arch=amd64] https://packages.broadcom.com/artifactory/saltproject-deb/ stable main
+    when: salt_enabled.rc == 0
+    tags:
+    - salt
+
+  - name: Warn if Salt is not in use
+    debug:
+      msg: "salt-minion is not enabled here - remove salt.list and purge salt-common/salt-minion instead of repointing."
+    when: salt_enabled.rc != 0
+    tags:
+    - salt
+
+  # ── Puppet: remove ────────────────────────────────────────────────────────
+
+  - name: Confirm puppet-agent really is absent before removing the repo
+    command: dpkg-query -W -f=${Status} puppet-agent
+    register: puppet_agent
+    changed_when: false
+    failed_when: false
+    tags:
+    - puppet
+
+  - name: Purge puppet8-release
+    apt:
+      name: puppet8-release
+      state: absent
+      purge: yes
+    when: "'install ok installed' not in (puppet_agent.stdout | default(''))"
+    tags:
+    - puppet
+
+  - name: Remove leftover Puppet repo files
+    file:
+      path: "{{ item }}"
+      state: absent
+    loop:
+    - /etc/apt/sources.list.d/puppet8-release.list
+    - /etc/apt/sources.list.d/puppet8-release.list.distUpgrade
+    when: "'install ok installed' not in (puppet_agent.stdout | default(''))"
+    tags:
+    - puppet
+
+  - name: Leave puppet alone if the agent is actually installed
+    debug:
+      msg: "puppet-agent IS installed - not removing the repo. Refresh the expired key and fix the focal/jammy mismatch instead."
+    when: "'install ok installed' in (puppet_agent.stdout | default(''))"
+    tags:
+    - puppet
+
+  # Old salt.list.distUpgrade still names the dead host. apt ignores non-.list
+  # files, but it is misleading to leave behind.
+  - name: Remove stale distUpgrade leftovers referencing the dead Salt repo
+    file:
+      path: /etc/apt/sources.list.d/salt.list.distUpgrade
+      state: absent
+    tags:
+    - salt
+
+
+- name: Verify apt is clean
+  hosts: "{{ twingate_target | default('twingate') }}"
+  become: yes
+
+  tasks:
+
+  - name: Update apt cache
+    apt:
+      update_cache: yes
+    register: apt_result
+    failed_when: false
+    tags:
+    - verify
+
+  - name: Report
+    debug:
+      msg: "{{ 'apt update OK' if not apt_result.failed else 'STILL FAILING: ' + (apt_result.msg | default('')) }}"
+    tags:
+    - verify

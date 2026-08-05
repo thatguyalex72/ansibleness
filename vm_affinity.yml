@@ -1,0 +1,176 @@
+---
+# DESCRIPTION
+# Checks that a group of VMs is spread evenly across cluster nodes, and can pin
+# them there with strict affinity so a reboot or failover does not quietly
+# re-stack them onto fewer nodes.
+#
+# Written for the fio load generators: they only light up all five SA2 node
+# gauges while one VM runs per node. With strict_affinity off, HyperCore is free
+# to move them and a node goes flat with no warning.
+#
+# --tags check is read-only and safe to run on a schedule - it reports drift
+# without changing anything.
+
+# Usage:
+#   . ~/.scale_env && ansible-playbook vm_affinity.yml --tags check
+#   . ~/.scale_env && ansible-playbook vm_affinity.yml --tags apply
+#   . ~/.scale_env && ansible-playbook vm_affinity.yml --tags apply -e strict=false
+#
+# Periodic drift check (cron on a host with the repo and ~/.scale_env):
+#   0 8 * * * . $HOME/.scale_env && ansible-playbook vm_affinity.yml --tags check
+#
+# NOTE: VMs are matched by IP, but the affinity module addresses them by NAME.
+# Run vm_rename.yml first if inventory and HyperCore names disagree, or this
+# will configure the wrong VM.
+
+
+- name: Check and set VM node affinity
+  hosts: localhost
+  connection: local
+  gather_facts: no
+
+  vars:
+    target: fio_load
+    cluster_host: 10.8.12.26      # SA2
+    strict: true                  # set strict_affinity when applying
+    set_backup: true              # also assign a spread-out backup node
+
+    host_map: >-
+      {{ dict(groups[target] | zip(groups[target] | map('extract', hostvars, 'ansible_host'))) }}
+
+  tasks:
+
+  - name: Check credentials are present
+    assert:
+      that:
+      - lookup('env', 'SC_USERNAME') | length > 0
+      - lookup('env', 'SC_PASSWORD') | length > 0
+      fail_msg: "SC_USERNAME/SC_PASSWORD not set - run '. ~/.scale_env' first."
+    tags: [check, apply]
+
+  - name: Assess current spread and compute target placement
+    shell: |
+      python3 - <<'PY'
+      import json, os, urllib3, requests
+      from collections import Counter
+      urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+      s = requests.Session(); s.verify = False
+      s.auth = (os.environ["SC_USERNAME"], os.environ["SC_PASSWORD"])
+      base = "https://{{ cluster_host }}/rest/v1"
+      nodes = s.get(f"{base}/Node", timeout=20).json()
+      vd    = s.get(f"{base}/VirDomain", timeout=30).json()
+      hosts = json.loads('''{{ host_map | to_json }}''')
+
+      nodes = sorted(nodes, key=lambda n: n.get("peerID", 0))
+      by_uuid = {n["uuid"]: n for n in nodes}
+      label   = lambda u: f"p{by_uuid[u]["peerID"]}" if u in by_uuid else (u[:6] if u else "-")
+
+      by_ip = {}
+      for v in vd:
+          for dev in v.get("netDevs") or []:
+              for ip in dev.get("ipv4Addresses") or []:
+                  if ip:
+                      by_ip[ip] = v
+
+      rows, missing = [], []
+      for i, (inv, ip) in enumerate(sorted(hosts.items())):
+          v = by_ip.get(ip)
+          if not v:
+              missing.append(f"{inv} ({ip})")
+              continue
+          a = v.get("affinityStrategy") or {}
+          # Round-robin over nodes: with <= one VM per node this gives exactly
+          # one each, which is what makes all node gauges move.
+          want = nodes[i % len(nodes)]
+          backup = nodes[(i + 1) % len(nodes)]
+          rows.append({
+              "inv": inv, "vm": v.get("name", ""), "ip": ip,
+              "running_on": label(v.get("nodeUUID") or ""),
+              "cur_pref": label(a.get("preferredNodeUUID") or ""),
+              "cur_backup": label(a.get("backupNodeUUID") or ""),
+              "cur_strict": bool(a.get("strictAffinity")),
+              "want_pref_uuid": want["uuid"], "want_pref": f"p{want["peerID"]}",
+              "want_backup_uuid": backup["uuid"], "want_backup": f"p{backup["peerID"]}",
+          })
+
+      spread = Counter(r["running_on"] for r in rows)
+      over   = {n: c for n, c in spread.items() if c > 1}
+      unused = [f"p{n["peerID"]}" for n in nodes
+                if f"p{n["peerID"]}" not in spread]
+      want_strict = os.environ["WANT_STRICT"] == "True"
+      drift  = [r for r in rows
+                if r["cur_pref"] != r["want_pref"] or r["cur_strict"] != want_strict]
+
+      print(json.dumps({
+          "rows": rows, "missing": missing, "nodes": len(nodes),
+          "spread": dict(spread), "over": over, "unused": unused,
+          "drift": [r["inv"] for r in drift],
+      }))
+      PY
+    args:
+      executable: /bin/bash
+    environment:
+      SC_USERNAME: "{{ lookup('env', 'SC_USERNAME') }}"
+      SC_PASSWORD: "{{ lookup('env', 'SC_PASSWORD') }}"
+      WANT_STRICT: "{{ strict | bool }}"
+    register: aff_raw
+    changed_when: false
+    tags: [check, apply]
+
+  - name: Parse
+    set_fact:
+      aff: "{{ aff_raw.stdout | from_json }}"
+    tags: [check, apply]
+
+  - name: Report
+    debug:
+      msg: |
+        {{ '%-14s %-22s %-10s %-9s %-8s %s' | format('INVENTORY','HYPERCORE VM','RUNNING ON','PREFERRED','BACKUP','STRICT') }}
+        {{ '-' * 78 }}
+        {% for r in aff.rows %}
+        {{ '%-14s %-22s %-10s %-9s %-8s %s' | format(r.inv, r.vm, r.running_on, r.cur_pref, r.cur_backup, 'YES' if r.cur_strict else 'no') }}
+        {% endfor %}
+
+        nodes in cluster : {{ aff.nodes }}   VMs: {{ aff.rows | length }}
+        current spread   : {{ aff.spread }}
+        {% if aff.over %}
+        STACKED          : {{ aff.over }}  <-- more than one VM on the same node
+        {% endif %}
+        {% if aff.unused %}
+        IDLE NODES       : {{ aff.unused | join(', ') }}  <-- these gauges will read flat
+        {% endif %}
+        {% if aff.drift %}
+        DRIFT            : {{ aff.drift | join(', ') }}  <-- affinity not as desired; run --tags apply
+        {% else %}
+        DRIFT            : none - affinity matches desired placement
+        {% endif %}
+        {% if aff.missing %}
+        NOT MATCHED      : {{ aff.missing | join(', ') }}
+        {% endif %}
+    tags: [check, apply]
+
+  # ── Apply ─────────────────────────────────────────────────────────────────
+
+  - name: Set node affinity
+    scale_computing.hypercore.vm_node_affinity:
+      vm_name: "{{ item.vm }}"
+      strict_affinity: "{{ strict | bool }}"
+      preferred_node:
+        node_uuid: "{{ item.want_pref_uuid }}"
+      backup_node: "{{ {'node_uuid': item.want_backup_uuid} if set_backup | bool else omit }}"
+      cluster_instance:
+        host: "https://{{ cluster_host }}"
+        username: "{{ lookup('env', 'SC_USERNAME') }}"
+        password: "{{ lookup('env', 'SC_PASSWORD') }}"
+    loop: "{{ aff.rows }}"
+    loop_control:
+      label: "{{ item.vm }} -> preferred {{ item.want_pref }}, backup {{ item.want_backup }}, strict {{ strict }}"
+    tags: [apply]
+
+  - name: Done
+    debug:
+      msg: >-
+        Affinity set on {{ aff.rows | length }} VM(s).
+        Note this sets PREFERRED node, it does not live-migrate a running VM -
+        re-run --tags check to see where they actually are.
+    tags: [apply]

@@ -1,1 +1,5 @@
 /windows/win_inventory
+
+# Python bytecode cache - generated, interpreter-version specific
+__pycache__/
+*.pyc
