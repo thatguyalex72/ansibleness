@@ -3,12 +3,40 @@
 # Apply Windows Updates
 # Author: Shamelessly based on the Windows update playbook from u/zoredache on r/ansible
 
+# ── REBOOTS ───────────────────────────────────────────────────────────────────
+# NOTHING here reboots a host unless you explicitly ask for it.
+#
+#   --tags reboot          reboot hosts that have a reboot already pending
+#   -e reboot_after=true   install and reboot in one pass (old behaviour)
+#
+# Windows cumulative updates usually cannot finish applying without a restart,
+# so the normal sequence is:
+#   --tags upgrade   ->   --tags reboot   ->   --tags upgrade
+# The second pass finishes anything that was staged for the restart.
+
+# ── UPDATE CATEGORIES, IN PLAIN ENGLISH ───────────────────────────────────────
+#   SecurityUpdates    Fixes for security vulnerabilities. The monthly
+#                      cumulative update lands here. The reason you patch.
+#   CriticalUpdates    Non-security fixes for serious bugs (crashes, data loss).
+#   UpdateRollups      Bundles of previously-released hotfixes for a component.
+#   DefinitionUpdates  Defender antivirus signatures. Daily, tiny, no reboot.
+#                      Data, not code - the freshclam of the Windows world.
+#   Drivers            Hardware drivers. On a HyperCore VM this includes the
+#                      virtio storage and network drivers, so swapping them
+#                      under a running guest deserves a maintenance window.
+#   Upgrades           A WHOLE OS VERSION JUMP, e.g. Win11 24H2 -> 25H2. This
+#                      is do-release-upgrade, NOT apt upgrade. Takes 20-45 min,
+#                      reboots several times, and is not routine patching.
+#
+# The 'upgrade' tag deliberately EXCLUDES Drivers and Upgrades. Use the
+# 'feature-upgrade' tag when you actually want those, on a day you are watching.
+
 # Usage:
 # Check for available updates and reboot status:
 #   ansible-playbook windows/apply_windows_updates.yml --tags check -i windows/win_inventory
 # List available updates by category:
 #   ansible-playbook windows/apply_windows_updates.yml --tags list -i windows/win_inventory
-# Install all updates (requires reboot if needed):
+# Routine patching (security + critical + rollups + definitions, NO reboot):
 #   ansible-playbook windows/apply_windows_updates.yml --tags upgrade -i windows/win_inventory
 # Security updates only:
 #   ansible-playbook windows/apply_windows_updates.yml --tags security -i windows/win_inventory
@@ -16,6 +44,8 @@
 #   ansible-playbook windows/apply_windows_updates.yml --tags critical -i windows/win_inventory
 # Update rollups only:
 #   ansible-playbook windows/apply_windows_updates.yml --tags rollup -i windows/win_inventory
+# OS version upgrades and drivers (deliberate, slow, reboots a lot):
+#   ansible-playbook windows/apply_windows_updates.yml --tags feature-upgrade -i windows/win_inventory
 # Check if a reboot is pending (no update search):
 #   ansible-playbook windows/apply_windows_updates.yml --tags reboot-check -i windows/win_inventory
 # Reboot hosts with a pending reboot:
@@ -26,6 +56,15 @@
 - name: Apply Windows Updates
   hosts: win
   gather_facts: no
+
+  vars:
+    # Reboots are opt-in. Override with -e reboot_after=true to install and
+    # restart in a single pass.
+    reboot_after: false
+    # 1 hour. A Server 2019 cumulative can spend 20+ minutes in the servicing
+    # phase at boot, and a feature upgrade far longer. Interrupting that is
+    # genuinely dangerous, so wait rather than give up.
+    reboot_wait: 3600
 
   # On a macOS controller, Ansible forks a worker per host and the winrm
   # connection plugin pulls in _scproxy/CoreFoundation, which the Obj-C runtime
@@ -93,21 +132,30 @@
     - reboot-check
     - reboot
 
-  # ── Upgrade (all categories) ──────────────────────────────────────────────
+  # ── Routine patching ──────────────────────────────────────────────────────
+  # Everything you want applied on a schedule. Deliberately excludes Drivers
+  # and Upgrades - see the category notes at the top of this file.
 
-  - name: Install all updates
+  - name: Install routine updates
     ansible.windows.win_updates:
-      category_names: '*'
+      category_names:
+      - SecurityUpdates
+      - CriticalUpdates
+      - UpdateRollups
+      - DefinitionUpdates
       state: installed
-      reboot: yes
-      reboot_timeout: 600
+      reboot: "{{ reboot_after | bool }}"
+      reboot_timeout: "{{ reboot_wait }}"
     register: upgrade_results
     tags:
     - upgrade
 
-  - name: Show upgrade results
+  - name: Show routine update results
     debug:
-      msg: "Installed {{ upgrade_results.installed_update_count }} update(s). Reboot required: {{ upgrade_results.reboot_required }}"
+      msg: >-
+        Installed {{ upgrade_results.installed_update_count }} update(s).
+        {{ 'REBOOT PENDING - run --tags reboot to finish applying them.'
+           if upgrade_results.reboot_required else 'No reboot needed.' }}
     tags:
     - upgrade
 
@@ -118,15 +166,17 @@
       category_names:
       - SecurityUpdates
       state: installed
-      reboot: yes
-      reboot_timeout: 600
+      reboot: "{{ reboot_after | bool }}"
+      reboot_timeout: "{{ reboot_wait }}"
     register: security_results
     tags:
     - security
 
   - name: Show security update results
     debug:
-      msg: "Installed {{ security_results.installed_update_count }} security update(s). Reboot required: {{ security_results.reboot_required }}"
+      msg: >-
+        Installed {{ security_results.installed_update_count }} security update(s).
+        {{ 'REBOOT PENDING - run --tags reboot.' if security_results.reboot_required else 'No reboot needed.' }}
     tags:
     - security
 
@@ -137,15 +187,17 @@
       category_names:
       - CriticalUpdates
       state: installed
-      reboot: yes
-      reboot_timeout: 600
+      reboot: "{{ reboot_after | bool }}"
+      reboot_timeout: "{{ reboot_wait }}"
     register: critical_results
     tags:
     - critical
 
   - name: Show critical update results
     debug:
-      msg: "Installed {{ critical_results.installed_update_count }} critical update(s). Reboot required: {{ critical_results.reboot_required }}"
+      msg: >-
+        Installed {{ critical_results.installed_update_count }} critical update(s).
+        {{ 'REBOOT PENDING - run --tags reboot.' if critical_results.reboot_required else 'No reboot needed.' }}
     tags:
     - critical
 
@@ -156,23 +208,53 @@
       category_names:
       - UpdateRollups
       state: installed
-      reboot: yes
-      reboot_timeout: 600
+      reboot: "{{ reboot_after | bool }}"
+      reboot_timeout: "{{ reboot_wait }}"
     register: rollup_results
     tags:
     - rollup
 
   - name: Show rollup results
     debug:
-      msg: "Installed {{ rollup_results.installed_update_count }} rollup(s). Reboot required: {{ rollup_results.reboot_required }}"
+      msg: >-
+        Installed {{ rollup_results.installed_update_count }} rollup(s).
+        {{ 'REBOOT PENDING - run --tags reboot.' if rollup_results.reboot_required else 'No reboot needed.' }}
     tags:
     - rollup
 
+  # ── OS version upgrades and drivers ───────────────────────────────────────
+  # NOT routine. 'Upgrades' is a whole OS version jump (do-release-upgrade),
+  # and 'Drivers' on a HyperCore VM means swapping virtio storage/network
+  # drivers under a running guest. Both want a maintenance window and someone
+  # watching. Expect 20-45 minutes and multiple restarts.
+
+  - name: Install OS version upgrades and drivers
+    ansible.windows.win_updates:
+      category_names:
+      - Upgrades
+      - Drivers
+      state: installed
+      reboot: "{{ reboot_after | bool }}"
+      reboot_timeout: "{{ reboot_wait }}"
+    register: feature_results
+    tags:
+    - feature-upgrade
+
+  - name: Show feature upgrade results
+    debug:
+      msg: >-
+        Installed {{ feature_results.installed_update_count }} upgrade(s)/driver(s).
+        {{ 'REBOOT PENDING - run --tags reboot. A feature upgrade may reboot several times.'
+           if feature_results.reboot_required else 'No reboot needed.' }}
+    tags:
+    - feature-upgrade
+
   # ── Reboot ────────────────────────────────────────────────────────────────
+  # The only task that restarts anything.
 
   - name: Reboot if pending
     ansible.windows.win_reboot:
-      reboot_timeout: 600
+      reboot_timeout: "{{ reboot_wait }}"
     when: reboot_registry.exists
     tags:
     - reboot
