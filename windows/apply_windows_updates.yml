@@ -147,15 +147,25 @@
       reboot: "{{ reboot_after | bool }}"
       reboot_timeout: "{{ reboot_wait }}"
     register: upgrade_results
+    # A host with an already-pending reboot cannot install anything until it
+    # restarts, and win_updates raises a fatal error saying so. Reboots are
+    # opt-in here, so that state is expected rather than exceptional - report
+    # it as a clear skip instead. Otherwise a couple of hosts awaiting a
+    # restart turn a clean fleet run red and hide real failures in the noise.
+    failed_when:
+    - upgrade_results is failed
+    - "'reboot is required' not in (upgrade_results.msg | default(''))"
     tags:
     - upgrade
 
   - name: Show routine update results
     debug:
       msg: >-
-        Installed {{ upgrade_results.installed_update_count }} update(s).
-        {{ 'REBOOT PENDING - run --tags reboot to finish applying them.'
-           if upgrade_results.reboot_required else 'No reboot needed.' }}
+        {{ 'SKIPPED - reboot pending. Run --tags reboot, then this again.'
+           if 'reboot is required' in (upgrade_results.msg | default(''))
+           else 'Installed ' ~ upgrade_results.installed_update_count ~ ' update(s). '
+              ~ ('REBOOT PENDING - run --tags reboot to finish applying them.'
+                 if upgrade_results.reboot_required else 'No reboot needed.') }}
     tags:
     - upgrade
 
@@ -169,14 +179,21 @@
       reboot: "{{ reboot_after | bool }}"
       reboot_timeout: "{{ reboot_wait }}"
     register: security_results
+    # See "Install routine updates" above.
+    failed_when:
+    - security_results is failed
+    - "'reboot is required' not in (security_results.msg | default(''))"
     tags:
     - security
 
   - name: Show security update results
     debug:
       msg: >-
-        Installed {{ security_results.installed_update_count }} security update(s).
-        {{ 'REBOOT PENDING - run --tags reboot.' if security_results.reboot_required else 'No reboot needed.' }}
+        {{ 'SKIPPED - reboot pending. Run --tags reboot, then this again.'
+           if 'reboot is required' in (security_results.msg | default(''))
+           else 'Installed ' ~ security_results.installed_update_count ~ ' security update(s). '
+              ~ ('REBOOT PENDING - run --tags reboot.'
+                 if security_results.reboot_required else 'No reboot needed.') }}
     tags:
     - security
 
@@ -190,14 +207,21 @@
       reboot: "{{ reboot_after | bool }}"
       reboot_timeout: "{{ reboot_wait }}"
     register: critical_results
+    # See "Install routine updates" above.
+    failed_when:
+    - critical_results is failed
+    - "'reboot is required' not in (critical_results.msg | default(''))"
     tags:
     - critical
 
   - name: Show critical update results
     debug:
       msg: >-
-        Installed {{ critical_results.installed_update_count }} critical update(s).
-        {{ 'REBOOT PENDING - run --tags reboot.' if critical_results.reboot_required else 'No reboot needed.' }}
+        {{ 'SKIPPED - reboot pending. Run --tags reboot, then this again.'
+           if 'reboot is required' in (critical_results.msg | default(''))
+           else 'Installed ' ~ critical_results.installed_update_count ~ ' critical update(s). '
+              ~ ('REBOOT PENDING - run --tags reboot.'
+                 if critical_results.reboot_required else 'No reboot needed.') }}
     tags:
     - critical
 
@@ -211,14 +235,21 @@
       reboot: "{{ reboot_after | bool }}"
       reboot_timeout: "{{ reboot_wait }}"
     register: rollup_results
+    # See "Install routine updates" above.
+    failed_when:
+    - rollup_results is failed
+    - "'reboot is required' not in (rollup_results.msg | default(''))"
     tags:
     - rollup
 
   - name: Show rollup results
     debug:
       msg: >-
-        Installed {{ rollup_results.installed_update_count }} rollup(s).
-        {{ 'REBOOT PENDING - run --tags reboot.' if rollup_results.reboot_required else 'No reboot needed.' }}
+        {{ 'SKIPPED - reboot pending. Run --tags reboot, then this again.'
+           if 'reboot is required' in (rollup_results.msg | default(''))
+           else 'Installed ' ~ rollup_results.installed_update_count ~ ' rollup(s). '
+              ~ ('REBOOT PENDING - run --tags reboot.'
+                 if rollup_results.reboot_required else 'No reboot needed.') }}
     tags:
     - rollup
 
@@ -237,15 +268,21 @@
       reboot: "{{ reboot_after | bool }}"
       reboot_timeout: "{{ reboot_wait }}"
     register: feature_results
+    # See "Install routine updates" above.
+    failed_when:
+    - feature_results is failed
+    - "'reboot is required' not in (feature_results.msg | default(''))"
     tags:
     - feature-upgrade
 
   - name: Show feature upgrade results
     debug:
       msg: >-
-        Installed {{ feature_results.installed_update_count }} upgrade(s)/driver(s).
-        {{ 'REBOOT PENDING - run --tags reboot. A feature upgrade may reboot several times.'
-           if feature_results.reboot_required else 'No reboot needed.' }}
+        {{ 'SKIPPED - reboot pending. Run --tags reboot, then this again.'
+           if 'reboot is required' in (feature_results.msg | default(''))
+           else 'Installed ' ~ feature_results.installed_update_count ~ ' upgrade(s)/driver(s). '
+              ~ ('REBOOT PENDING - run --tags reboot. A feature upgrade may reboot several times.'
+                 if feature_results.reboot_required else 'No reboot needed.') }}
     tags:
     - feature-upgrade
 

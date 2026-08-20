@@ -21,6 +21,7 @@ wazuh_publab ansible_host=10.5.11.89
 zabby_demolab ansible_host=10.8.12.50
 authentik_demo ansible_host=10.8.12.49
 docker_demolab ansible_host=10.8.12.31
+docker2_demolab ansible_host=10.8.12.86
 dvwa ansible_host=10.8.12.51
 
 #[virtnet]
@@ -40,7 +41,7 @@ FIO1 ansible_host=10.8.12.69
 FIO2 ansible_host=10.8.12.71
 FIO3 ansible_host=10.8.12.75
 FIO4 ansible_host=10.8.12.76
-FIO5 ansible_host=10.8.12.81
+FIO5 ansible_host=10.8.12.61
 
 # === Composite groups (built from the base groups above, no host repetition) ===
 [twingate:children]

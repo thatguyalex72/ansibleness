@@ -1,0 +1,128 @@
+---
+# DESCRIPTION
+# Make WinRM reachable on every Windows host regardless of how Network Location
+# Awareness classifies the NIC.
+#
+# Enable-PSRemoting creates two rules: WINRM-HTTP-In-TCP (Domain/Private, any
+# address) and WINRM-HTTP-In-TCP-PUBLIC (Public, LocalSubnet ONLY). On a domain
+# controller NLA often probes for the domain before AD/DNS has finished
+# starting, fails, and falls back to Public - at which point only the
+# LocalSubnet rule is live and every off-subnet management connection is
+# dropped. That is how dc01 became unreachable twice, presenting as a 120s
+# connect timeout rather than a refusal.
+#
+# Ansible reaches these hosts from the OpenVPN client pool (10.8.11.0/24),
+# never from the target's own subnet, so LocalSubnet can never match us.
+#
+# This rule is -Profile Any, so NLA's decision stops mattering.
+
+# Usage:
+#   ansible-playbook windows/win_winrm_firewall.yml -i windows/win_inventory
+# Report the current rule on every host, change nothing:
+#   ansible-playbook windows/win_winrm_firewall.yml -i windows/win_inventory --tags verify
+
+- name: Ensure WinRM survives a Public network profile
+  hosts: win
+  gather_facts: no
+
+  vars:
+    winrm_rule_name: WinRM-HTTP-In-Mgmt
+    winrm_rule_display: WinRM HTTP-In (management)
+
+    # The two labs are reached over SEPARATE OpenVPN tunnels, so each host
+    # should trust only the pool that can actually reach it:
+    #
+    #   demo lab    10.8.12.0/24  <- VPN pool 10.8.11.0/24   (utun4)
+    #   public lab  10.5.11.0/24  <- VPN pool 10.10.11.0/24  (utun5)
+    #
+    # Granting every host every subnet would also work, but it gives the public
+    # lab standing access to management ports in the demo lab and vice versa
+    # for no benefit - and it lets a missing pool hide behind the subnets that
+    # happen to be correct, which is exactly how dc01 stayed broken.
+    lab_subnets:
+      demo:
+      - 10.8.11.0/24    # OpenVPN pool - where management traffic arrives from
+      - 10.8.12.0/24    # the lab itself, for a controller running inside it
+      public:
+      - 10.10.11.0/24   # OpenVPN pool
+      - 10.5.11.0/24    # the lab itself
+
+    # Derived from the host's own address rather than an inventory group, so
+    # adding a host to win_inventory does not need a second edit here.
+    host_lab: >-
+      {{ 'demo'   if ansible_host.startswith('10.8.12.') else
+         'public' if ansible_host.startswith('10.5.11.') else 'UNKNOWN' }}
+    winrm_allowed_subnets: "{{ lab_subnets[host_lab] | default([]) }}"
+
+  tasks:
+
+  - name: Refuse to guess which lab a host belongs to
+    assert:
+      that: host_lab != 'UNKNOWN'
+      fail_msg: >-
+        {{ inventory_hostname }} ({{ ansible_host }}) is in neither
+        10.8.12.0/24 (demo) nor 10.5.11.0/24 (public). Add its lab to
+        lab_subnets and extend host_lab - inheriting the wrong management
+        scope would leave WinRM silently unreachable after a reboot.
+      success_msg: "{{ inventory_hostname }} -> {{ host_lab }} lab"
+    tags: [always]
+
+  - name: Ensure the WinRM management rule exists and is scoped correctly
+    ansible.windows.win_shell: |
+      $ErrorActionPreference = 'Stop'
+      $want = '{{ winrm_allowed_subnets | join(",") }}'.Split(',')
+      $rule = Get-NetFirewallRule -Name '{{ winrm_rule_name }}' -ErrorAction SilentlyContinue
+
+      if (-not $rule) {
+          New-NetFirewallRule -Name '{{ winrm_rule_name }}' `
+            -DisplayName '{{ winrm_rule_display }}' `
+            -Protocol TCP -LocalPort 5985 -Direction Inbound -Action Allow `
+            -Profile Any -RemoteAddress $want | Out-Null
+          'created'
+      } else {
+          # Windows stores and reports RemoteAddress in mask form
+          # (10.8.11.0/255.255.255.0), so comparing it directly against CIDR
+          # would differ every run and the task would never report ok.
+          # Compare network addresses only - every subnet here is a /24.
+          $have = @(($rule | Get-NetFirewallAddressFilter).RemoteAddress |
+                    ForEach-Object { ($_ -split '/')[0] } | Sort-Object)
+          $need = @($want | ForEach-Object { ($_ -split '/')[0] } | Sort-Object)
+
+          if ((Compare-Object $have $need) -or
+              ($rule.Enabled -ne 'True') -or ($rule.Profile -ne 'Any')) {
+              Set-NetFirewallRule -Name '{{ winrm_rule_name }}' `
+                -Enabled True -Profile Any -RemoteAddress $want | Out-Null
+              'updated'
+          } else {
+              'ok'
+          }
+      }
+    register: rule_state
+    changed_when: rule_state.stdout is search('created|updated')
+    tags: [apply]
+
+  - name: Show what changed
+    debug:
+      msg: >-
+        {{ {'created': 'rule CREATED', 'updated': 'rule UPDATED',
+            'ok': 'already correct'}[rule_state.stdout | trim] }}
+    tags: [apply]
+
+  - name: Report the effective rule and current network profile
+    ansible.windows.win_shell: |
+      $r = Get-NetFirewallRule -Name '{{ winrm_rule_name }}' -ErrorAction SilentlyContinue
+      $p = (Get-NetConnectionProfile).NetworkCategory -join ','
+      if (-not $r) {
+          "lab={{ host_lab }} profile=$p rule=ABSENT would-set={{ winrm_allowed_subnets | join(',') }}"
+      } else {
+          $a = ($r | Get-NetFirewallAddressFilter).RemoteAddress -join ' '
+          "lab={{ host_lab }} profile=$p enabled=$($r.Enabled) scope=$($r.Profile) remote=$a"
+      }
+    register: rule_report
+    changed_when: false
+    tags: [verify]
+
+  - name: Effective rule
+    debug:
+      msg: "{{ rule_report.stdout | trim }}"
+    tags: [verify]
