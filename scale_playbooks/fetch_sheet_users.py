@@ -198,12 +198,12 @@ def get_cluster_usernames():
     for cluster_url in PUBLAB_CLUSTERS:
         try:
             req = urllib.request.Request(
-                f"{cluster_url}/rest/v1/ClusterMember",
+                f"{cluster_url}/rest/v1/User",
                 headers={"Authorization": f"Basic {credentials}"},
             )
             with urllib.request.urlopen(req, context=ctx, timeout=10) as resp:
                 data = json.loads(resp.read())
-                cluster_users = {u.get("username", "").lower() for u in data}
+                cluster_users = {u["username"].lower() for u in data if u.get("username")}
                 usernames.update(cluster_users)
                 print(f"  {cluster_url}: {len(cluster_users)} users found")
         except Exception as e:
@@ -245,7 +245,7 @@ def fetch_users(service, dry_run=False, override_usernames=None):
         spreadsheetId=SPREADSHEET_ID,
         includeGridData=True,
         ranges=sheet_name,
-        fields="sheets.data.rowData.values.userEnteredFormat.textFormat.italic",
+        fields="sheets.data.rowData.values.userEnteredFormat.textFormat(italic,strikethrough)",
     ).execute()
 
     format_rows = (
@@ -254,18 +254,28 @@ def fetch_users(service, dry_run=False, override_usernames=None):
         .get("rowData", [])
     )
 
-    def is_italic(row_idx):
+    def _text_format(row_idx):
         if row_idx >= len(format_rows):
-            return False
+            return {}
         values = format_rows[row_idx].get("values", [])
         if not values:
-            return False
-        return values[0].get("userEnteredFormat", {}).get("textFormat", {}).get("italic", False)
+            return {}
+        return values[0].get("userEnteredFormat", {}).get("textFormat", {})
 
-    # Build existing username and email sets from italic (already processed) rows.
+    # Row formatting is the processing record:
+    #   italic                  -> created
+    #   italic + strikethrough  -> rejected as a duplicate submission, never created
+    def is_italic(row_idx):
+        return _text_format(row_idx).get("italic", False)
+
+    def is_struck(row_idx):
+        return _text_format(row_idx).get("strikethrough", False)
+
+    # Build existing username and email records from processed (italic) rows.
     print("Checking for existing usernames and duplicate submissions...")
-    sheet_usernames = {}  # username_lower -> sheet_row
+    sheet_usernames = {}  # username_lower -> {"row": sheet_row, "email": email}
     seen_emails = {}  # email -> {full_name, company, timestamp}
+    struck_rows = 0
 
     for i, row in enumerate(rows[1:], start=1):
         if not is_italic(i):
@@ -273,11 +283,17 @@ def fetch_users(service, dry_run=False, override_usernames=None):
         def get_italic_col(idx):
             return row[idx].strip() if idx < len(row) else ""
         uname = get_italic_col(username_idx)
-        email = get_italic_col(email_idx)
-        if uname:
-            sheet_usernames[uname.lower()] = i + 1
         raw_email = get_italic_col(email_idx)
         clean_email = extract_email(raw_email) if raw_email else ""
+
+        # A struck row is a rejected duplicate — the account was never created under
+        # it, so it must not become the canonical owner of that username. Its email is
+        # still recorded so a third submission is caught as a duplicate.
+        if is_struck(i):
+            struck_rows += 1
+        elif uname:
+            sheet_usernames[uname.lower()] = {"row": i + 1, "email": clean_email.lower()}
+
         if clean_email:
             seen_emails[clean_email.lower()] = {
                 "full_name": get_italic_col(full_name_idx),
@@ -285,7 +301,10 @@ def fetch_users(service, dry_run=False, override_usernames=None):
                 "timestamp": get_italic_col(timestamp_idx),
             }
 
-    print(f"  sheet: {len(sheet_usernames)} existing usernames, {len(seen_emails)} processed emails (italic rows only)")
+    print(
+        f"  sheet: {len(sheet_usernames)} existing usernames, {len(seen_emails)} processed emails "
+        f"({struck_rows} struck duplicate row(s) excluded from usernames)"
+    )
     cluster_usernames = get_cluster_usernames()
     existing_usernames = set(sheet_usernames) | cluster_usernames
 
@@ -317,8 +336,11 @@ def fetch_users(service, dry_run=False, override_usernames=None):
         cc        = extract_email(get_col(cc_idx))
         timestamp = get_col(timestamp_idx)
 
-        # Duplicate submission check — same email already processed or in this batch
-        email_lower = email.lower() if email else ""
+        # Duplicate submission check — same email already processed or in this batch.
+        # Compare on the extracted address, not the raw cell: seen_emails is keyed on
+        # extract_email() output, so a cell like "EMEA - a@b.com" would never match.
+        # `email` itself stays raw — send_emails() delivers to it.
+        email_lower = extract_email(email).lower() if email else ""
         if email_lower and email_lower in seen_emails:
             duplicates.append({
                 "full_name":          full_name,
@@ -372,10 +394,9 @@ def fetch_users(service, dry_run=False, override_usernames=None):
                 "values": [[vmtag]],
             })
 
-        # Conflict check
+        # Username collision check
         username_lower = username.lower()
         conflict_source = None
-        original_row = None
         if username_lower in (override_usernames or set()):
             pass  # force-create despite conflict
         elif username_lower in generated_this_run:
@@ -384,17 +405,26 @@ def fetch_users(service, dry_run=False, override_usernames=None):
             conflict_source = "cluster"
         elif username_lower in sheet_usernames:
             conflict_source = "sheet"
-            original_row = sheet_usernames[username_lower]
 
         if conflict_source:
+            # Reaching here means the email did NOT match any processed row — the
+            # duplicate check above owns that case and runs first. So this is a
+            # username collision between what look like two different people, and it
+            # stays manual: auto-striking a genuine first-initial-plus-surname
+            # collision would silently drop a real user. The owning row's address is
+            # recorded alongside so the two can be compared at a glance.
+            owner = sheet_usernames.get(username_lower)
+
             conflict = {
                 "username":  username,
                 "full_name": full_name,
                 "sheet_row": i + 1,
                 "source":    conflict_source,
+                "email":     email,
             }
-            if original_row is not None:
-                conflict["original_row"] = original_row
+            if owner:
+                conflict["original_row"] = owner["row"]
+                conflict["original_email"] = owner["email"]
             conflicts.append(conflict)
             continue
 

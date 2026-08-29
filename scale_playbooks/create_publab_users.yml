@@ -3,16 +3,33 @@
 # Skips rows already italicized in the sheet (already created).
 # After all clusters finish, marks newly created rows italic automatically.
 #
-# USAGE (from scale_playbooks/):
+# USAGE (must be run from scale_playbooks/ — see PREREQUISITES #3):
 #   Full run:         ansible-playbook create_publab_users.yml
 #   Preview only:     ansible-playbook create_publab_users.yml --tags check
 #   Single cluster:   ansible-playbook create_publab_users.yml --tags pub1
+#   Create, no email: ansible-playbook create_publab_users.yml --tags nomail
+#                     (fetch + create on PUB1/2/3 + mark rows done; no welcome email)
 #
 # PREREQUISITES:
 #   1. Set GSHEET_SERVICE_ACCOUNT_FILE and GSHEET_SPREADSHEET_ID env vars.
 #   2. Service account must have Editor access to the Google Sheet.
+#   3. Run from scale_playbooks/ so this directory's ansible.cfg (and with it
+#      inventory_with_clusters) is loaded. Running from ~/ansibleness/ instead
+#      picks up inventory_main, which has no PUB1/2/3 nodes — the create plays
+#      then match zero hosts and are skipped while the localhost email and
+#      mark-done plays still run. A preflight assert below now catches this.
 #
-# CLUSTER TAGS: pub1, pub2, pub3
+# TAG VOCABULARY:
+#   always            deps + inventory assert; runs on every invocation
+#   check             preview only — fetch runs with --dry-run, nothing is created
+#   pub1|pub2|pub3    that one cluster's create play
+#   nomail            create on all 3 clusters + mark rows done, but no email
+#   email             the welcome email play on its own
+#   markdone          italicize sheet rows on its own
+#
+# There is no "run everything" tag — a bare run already does that.
+# NOTE: --list-tags prints tags in arbitrary order (Ansible stores them in a
+#       set), so the ordering in that output is not significant.
 
 # =============================================================================
 - name: Ensure Python dependencies are installed
@@ -21,6 +38,17 @@
   gather_facts: false
   tags: [always]
   tasks:
+    - name: Verify publab cluster inventory is loaded
+      ansible.builtin.assert:
+        that:
+          - "'PUB1_node1' in groups['all']"
+          - "'PUB2_node1' in groups['all']"
+          - "'PUB3_node1' in groups['all']"
+        fail_msg: >-
+          Publab cluster hosts are missing from the inventory — the wrong ansible.cfg was loaded.
+          Run this playbook from the scale_playbooks/ directory so inventory_with_clusters is used.
+        quiet: true
+
     - name: Check for google-api-python-client
       ansible.builtin.command:
         cmd: "{{ ansible_playbook_python }} -c 'import google.oauth2.service_account'"
@@ -45,7 +73,7 @@
       ansible.builtin.command:
         cmd: >-
           {{ ansible_playbook_python }} fetch_sheet_users.py --mode fetch
-          {{ '--dry-run' if (ansible_run_tags | intersect(['all', 'create', 'pub1', 'pub2', 'pub3']) | length == 0) else '' }}
+          {{ '--dry-run' if (ansible_run_tags | intersect(['all', 'nomail', 'pub1', 'pub2', 'pub3']) | length == 0) else '' }}
           {{ '--override ' + override_users if override_users | default('') else '' }}
         chdir: "{{ playbook_dir }}"
       changed_when: true
@@ -75,7 +103,10 @@
 
     - name: "⚠ USERNAME CONFLICTS — resolve these manually in the sheet before re-running"
       ansible.builtin.debug:
-        msg: "Row {{ item.sheet_row }}: '{{ item.username }}' ({{ item.full_name }}) — already exists on {{ item.source }}{{ ' (originally row ' + item.original_row | string + ')' if item.original_row is defined else '' }}"
+        msg: >-
+          Row {{ item.sheet_row }}: '{{ item.username }}' ({{ item.full_name }})
+          — already exists on {{ item.source }}{{ ' (originally row ' + item.original_row | string + ')' if item.original_row is defined else '' }}
+          {{ '| emails — new: ' + (item.email | default('(none)', true)) + ', original: ' + (item.original_email | default('(none recorded)', true)) if item.original_row is defined else '' }}
       loop: "{{ conflicts | default([]) }}"
       loop_control:
         label: "{{ item.username }}"
@@ -99,7 +130,7 @@
   hosts: PUB1_node1
   connection: local
   gather_facts: false
-  tags: [pub1, create]
+  tags: [pub1, nomail]
   environment:
     SC_HOST: "https://10.5.11.80"
     SC_USERNAME: "{{ sc_username }}"
@@ -139,7 +170,7 @@
   hosts: PUB2_node1
   connection: local
   gather_facts: false
-  tags: [pub2, create]
+  tags: [pub2, nomail]
   environment:
     SC_HOST: "https://10.5.11.110"
     SC_USERNAME: "{{ sc_username }}"
@@ -180,7 +211,7 @@
   hosts: PUB3_node1
   connection: local
   gather_facts: false
-  tags: [pub3, create]
+  tags: [pub3, nomail]
   environment:
     SC_HOST: "https://10.5.11.100"
     SC_USERNAME: "{{ sc_username }}"
@@ -221,7 +252,7 @@
   hosts: localhost
   connection: local
   gather_facts: false
-  tags: create
+  tags: [email]
   tasks:
     - name: Email credentials to each new user
       ansible.builtin.command:
@@ -234,7 +265,7 @@
   hosts: localhost
   connection: local
   gather_facts: false
-  tags: create
+  tags: [markdone, nomail]
   tasks:
     - name: Mark created rows as italic in sheet
       ansible.builtin.command:
