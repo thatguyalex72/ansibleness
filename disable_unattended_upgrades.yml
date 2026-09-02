@@ -32,9 +32,18 @@
     uu_purge_package: false
 
     # needrestart mode once automation is off:
-    #   'a' = restart affected daemons automatically (deterministic during a patch run)
-    #   'l' = list only, never restart (services keep running old libs until reboot)
-    needrestart_mode: 'a'
+    #   'l' = list only, never restart (DEFAULT - services keep running old libs
+    #         until you reboot, which apply_apt_updates.yml --tags reboot handles)
+    #   'a' = restart affected daemons automatically
+    #   'i' = interactive (Ubuntu's default; blocks forever with no tty - never use)
+    #
+    # Do NOT set this to 'a' on hosts running a database plus a daemon that depends
+    # on it. needrestart batches every affected service into ONE `systemctl restart`,
+    # so systemd stops both and queues the DB's start behind the dependent's stop -
+    # while the dependent blocks on shutdown trying to flush to the now-stopped DB.
+    # Observed on zabby_demolab 2026-09-02: mysql + zabbix-server deadlocked for 40+
+    # minutes, wedging apt and hanging apply_apt_updates.yml fleet-wide.
+    needrestart_mode: 'l'
 
     uu_units:
       - apt-daily.timer
