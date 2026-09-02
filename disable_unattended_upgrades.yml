@@ -1,0 +1,257 @@
+---
+# DESCRIPTION
+# Disable Ubuntu's built-in unattended-upgrades / apt-daily automation fleet-wide.
+# Patching is handled deliberately via apply_apt_updates.yml instead.
+#
+# unattended-upgrades is seeded by the Ubuntu Server installer (it arrives in the
+# same transaction as ubuntu-server-minimal / cloud-init / snapd), so it is present
+# and armed on every host in [apt] whether or not anyone asked for it. Its config is
+# stock and effectively security-only; the thing that actually wedges hosts is
+# needrestart running in its default INTERACTIVE mode from a systemd timer with no
+# tty - it blocks on a debconf prompt forever while holding the dpkg lock.
+#
+# Process!!
+# Dry run, show diffs:   ansible-playbook disable_unattended_upgrades.yml --check --diff -K
+# Normal run:            ansible-playbook disable_unattended_upgrades.yml -K
+# Clear a wedged host:   ansible-playbook disable_unattended_upgrades.yml --tags unstick -K
+# Only fix needrestart:  ansible-playbook disable_unattended_upgrades.yml --tags needrestart -K
+# Report current state:  ansible-playbook disable_unattended_upgrades.yml --tags verify -K
+# Also purge the pkg:    ansible-playbook disable_unattended_upgrades.yml -e uu_purge_package=true -K
+# Limit to one host:     ansible-playbook disable_unattended_upgrades.yml -l zabby_demolab -K
+#
+# To undo everything:    ansible-playbook disable_unattended_upgrades.yml --tags restore -K
+
+- name: Disable unattended-upgrades and apt-daily automation
+  hosts: apt
+  gather_facts: no
+  become: yes
+
+  vars:
+    # Leave the package installed by default - disabling is reversible in one line.
+    # Override with -e uu_purge_package=true to remove it outright.
+    uu_purge_package: false
+
+    # needrestart mode once automation is off:
+    #   'a' = restart affected daemons automatically (deterministic during a patch run)
+    #   'l' = list only, never restart (services keep running old libs until reboot)
+    needrestart_mode: 'a'
+
+    uu_units:
+      - apt-daily.timer
+      - apt-daily-upgrade.timer
+      - apt-daily.service
+      - apt-daily-upgrade.service
+      - unattended-upgrades.service
+
+  tasks:
+
+  # ---------------------------------------------------------------- unstick --
+  # Runs first: a host stuck mid-dpkg holds the lock, which would block every
+  # apt task below it.
+
+  - name: Check whether an apt-daily run is currently active
+    ansible.builtin.command: systemctl is-active apt-daily-upgrade.service apt-daily.service
+    register: uu_active
+    changed_when: false
+    failed_when: false
+    check_mode: no
+    tags:
+    - unstick
+    - verify
+
+  - name: Report wedged host
+    ansible.builtin.debug:
+      msg: "apt-daily is ACTIVE here - stopping it and repairing dpkg state"
+    when: "'active' in uu_active.stdout_lines"
+    tags:
+    - unstick
+
+  - name: Stop the running apt-daily units
+    ansible.builtin.systemd_service:
+      name: "{{ item }}"
+      state: stopped
+    loop:
+      - apt-daily-upgrade.service
+      - apt-daily.service
+    when: "'active' in uu_active.stdout_lines"
+    tags:
+    - unstick
+
+  - name: Kill any needrestart left blocking on a debconf prompt
+    ansible.builtin.command: pkill -f '/usr/sbin/needrestart'
+    register: uu_pkill
+    changed_when: uu_pkill.rc == 0
+    failed_when: uu_pkill.rc not in [0, 1]
+    when: "'active' in uu_active.stdout_lines"
+    tags:
+    - unstick
+
+  - name: Repair any half-finished dpkg transaction
+    ansible.builtin.command: dpkg --configure -a
+    register: uu_dpkg_fix
+    changed_when: uu_dpkg_fix.stdout | length > 0
+    when: "'active' in uu_active.stdout_lines"
+    tags:
+    - unstick
+
+  # ---------------------------------------------------------------- disable --
+
+  - name: Turn off the APT periodic triggers
+    ansible.builtin.copy:
+      dest: /etc/apt/apt.conf.d/20auto-upgrades
+      backup: yes
+      owner: root
+      group: root
+      mode: '0644'
+      content: |
+        // Managed by ansible: disable_unattended_upgrades.yml
+        // Patching is performed deliberately via apply_apt_updates.yml.
+        APT::Periodic::Update-Package-Lists "0";
+        APT::Periodic::Unattended-Upgrade "0";
+        APT::Periodic::Download-Upgradeable-Packages "0";
+        APT::Periodic::AutocleanInterval "0";
+    tags:
+    - disable
+
+  - name: Look for a legacy 10periodic file
+    ansible.builtin.stat:
+      path: /etc/apt/apt.conf.d/10periodic
+    register: uu_10periodic
+    tags:
+    - disable
+
+  - name: Neutralise 10periodic if one exists
+    ansible.builtin.replace:
+      path: /etc/apt/apt.conf.d/10periodic
+      regexp: '^(\s*APT::Periodic::[A-Za-z-]+\s+)"[0-9]+";'
+      replace: '\1"0";'
+      backup: yes
+    when: uu_10periodic.stat.exists
+    tags:
+    - disable
+
+  - name: Stop and disable the apt-daily timers
+    ansible.builtin.systemd_service:
+      name: "{{ item }}"
+      state: stopped
+      enabled: no
+    loop:
+      - apt-daily.timer
+      - apt-daily-upgrade.timer
+    failed_when: false
+    tags:
+    - disable
+
+  # Masking matters: package upgrades have a habit of re-enabling these timers.
+  - name: Mask the apt-daily and unattended-upgrades units
+    ansible.builtin.systemd_service:
+      name: "{{ item }}"
+      masked: yes
+    loop: "{{ uu_units }}"
+    failed_when: false
+    tags:
+    - disable
+
+  # ------------------------------------------------------------ needrestart --
+  # Worth doing even with automation off: apply_apt_updates.yml runs
+  # `apt upgrade dist`, which fires the same needrestart apt hook.
+
+  - name: Check for needrestart
+    ansible.builtin.stat:
+      path: /etc/needrestart
+    register: uu_needrestart
+    tags:
+    - needrestart
+    - disable
+
+  - name: Set needrestart to non-interactive via drop-in
+    ansible.builtin.copy:
+      dest: /etc/needrestart/conf.d/50-noninteractive.conf
+      owner: root
+      group: root
+      mode: '0644'
+      content: |
+        # Managed by ansible: disable_unattended_upgrades.yml
+        # Default is 'i' (interactive), which blocks forever on a debconf prompt
+        # when apt runs without a tty. Drop-in survives package upgrades.
+        $nrconf{restart} = '{{ needrestart_mode }}';
+        $nrconf{kernelhints} = 0;
+    when: uu_needrestart.stat.exists
+    tags:
+    - needrestart
+    - disable
+
+  # ------------------------------------------------------------------ purge --
+
+  - name: Purge the unattended-upgrades package
+    ansible.builtin.apt:
+      name: unattended-upgrades
+      state: absent
+      purge: yes
+    when: uu_purge_package | bool
+    tags:
+    - purge
+
+  # ----------------------------------------------------------------- verify --
+
+  - name: Collect resulting state
+    ansible.builtin.shell: |
+      echo -n "periodic: "
+      grep -hE 'Unattended-Upgrade' /etc/apt/apt.conf.d/20auto-upgrades 2>/dev/null | tr -d ' ' || echo "no file"
+      for u in apt-daily.timer apt-daily-upgrade.timer unattended-upgrades.service; do
+        echo "$u: $(systemctl is-enabled $u 2>&1 | head -1)/$(systemctl is-active $u 2>&1 | head -1)"
+      done
+      echo -n "needrestart: "
+      grep -hE '^\$nrconf\{restart\}' /etc/needrestart/conf.d/*.conf 2>/dev/null || echo "no drop-in"
+      echo -n "pkg: "
+      dpkg-query -W -f='${Status}\n' unattended-upgrades 2>/dev/null || echo "not installed"
+    register: uu_state
+    changed_when: false
+    check_mode: no
+    tags:
+    - verify
+
+  - name: Show resulting state
+    ansible.builtin.debug:
+      msg: "{{ uu_state.stdout_lines }}"
+    tags:
+    - verify
+
+  # ---------------------------------------------------------------- restore --
+  # Put everything back the way Ubuntu shipped it.
+
+  - name: Unmask the apt-daily and unattended-upgrades units
+    ansible.builtin.systemd_service:
+      name: "{{ item }}"
+      masked: no
+    loop: "{{ uu_units }}"
+    failed_when: false
+    tags:
+    - never
+    - restore
+
+  - name: Restore stock periodic config
+    ansible.builtin.copy:
+      dest: /etc/apt/apt.conf.d/20auto-upgrades
+      owner: root
+      group: root
+      mode: '0644'
+      content: |
+        APT::Periodic::Update-Package-Lists "1";
+        APT::Periodic::Unattended-Upgrade "1";
+    tags:
+    - never
+    - restore
+
+  - name: Re-enable the apt-daily timers
+    ansible.builtin.systemd_service:
+      name: "{{ item }}"
+      state: started
+      enabled: yes
+    loop:
+      - apt-daily.timer
+      - apt-daily-upgrade.timer
+    failed_when: false
+    tags:
+    - never
+    - restore
