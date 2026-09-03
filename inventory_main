@@ -36,12 +36,21 @@ dadguard ansible_host=192.168.0.96
 # Included in [apt] below so they get patched with the rest of the fleet - the
 # fio load runs as a systemd service enabled at boot, so it resumes on its own
 # after a patch reboot.
+#
+# Addressing: these were deployed on DHCP, and the leases drifted - three of the
+# five entries here ended up pointing at unrelated machines (a Twingate
+# connector, and a Kali box that had picked up .60), so patch runs targeted the
+# wrong hosts. They are now pinned to statics outside the observed DHCP activity
+# via netplan_static.yml. FIOn here is se-utiln in the guest and
+# ScaleDemo.SEUtiln in HyperCore - see the note at the top of vm_placement.yml.
+#   ansible-playbook netplan_static.yml --tags apply -l FIO2
+# static_ip is read by netplan_static.yml - keep it equal to ansible_host.
 [fio_load]
-FIO1 ansible_host=10.8.12.69
-FIO2 ansible_host=10.8.12.71
-FIO3 ansible_host=10.8.12.75
-FIO4 ansible_host=10.8.12.76
-FIO5 ansible_host=10.8.12.61
+FIO1 ansible_host=10.8.12.240 static_ip=10.8.12.240
+FIO2 ansible_host=10.8.12.241 static_ip=10.8.12.241
+FIO3 ansible_host=10.8.12.242 static_ip=10.8.12.242
+FIO4 ansible_host=10.8.12.243 static_ip=10.8.12.243
+FIO5 ansible_host=10.8.12.244 static_ip=10.8.12.244
 
 # === Composite groups (built from the base groups above, no host repetition) ===
 [twingate:children]
