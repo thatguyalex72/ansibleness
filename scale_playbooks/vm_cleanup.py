@@ -37,9 +37,9 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # ── Config ─────────────────────────────────────────────────────────────────────
 
 CLUSTERS = [
-    {"name": "PUB1", "host": "10.5.11.80"},
-    {"name": "PUB2", "host": "10.5.11.110"},
-    {"name": "PUB3", "host": "10.5.11.100"},
+    {"name": "PUB1", "host": "10.5.11.11"},
+    {"name": "PUB2", "host": "10.5.11.14"},
+    {"name": "PUB3", "host": "10.5.11.15"},
 ]
 
 HC_USERNAME   = os.environ.get("SC_USERNAME")

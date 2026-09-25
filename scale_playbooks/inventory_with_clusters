@@ -35,10 +35,10 @@ US_3350F_node2 ansible_host=10.8.12.18
 US_3350F_node3 ansible_host=10.8.12.19
 
 [publab_clusters]
-PUB1_node1 ansible_host=10.5.11.80
-PUB1_node2 ansible_host=10.5.11.81
-PUB1_node3 ansible_host=10.5.11.82
-PUB2_node1 ansible_host=10.5.11.110
+PUB1_node1 ansible_host=10.5.11.11
+PUB1_node2 ansible_host=10.5.11.12
+PUB1_node3 ansible_host=10.5.11.13
+PUB2_node1 ansible_host=10.5.11.14
 PUB5_node1 ansible_host=10.5.11.50
 PUB5_node2 ansible_host=10.5.11.51
 PUB5_node3 ansible_host=10.5.11.52
@@ -46,15 +46,15 @@ PUB6 ansible_host=10.5.11.60
 PUB9_node1 ansible_host=10.5.11.90
 PUB9_node2 ansible_host=10.5.11.91
 PUB9_node2 ansible_host=10.5.11.92
-PUB3_node1 ansible_host=10.5.11.100
+PUB3_node1 ansible_host=10.5.11.15
 
 [pub1]
-PUB1_node1 ansible_host=10.5.11.80
-PUB1_node2 ansible_host=10.5.11.81
-PUB1_node3 ansible_host=10.5.11.82
+PUB1_node1 ansible_host=10.5.11.11
+PUB1_node2 ansible_host=10.5.11.12
+PUB1_node3 ansible_host=10.5.11.13
 
 [pub2]
-PUB2_node1 ansible_host=10.5.11.110
+PUB2_node1 ansible_host=10.5.11.14
 
 [pub5]
 PUB5_node1 ansible_host=10.5.11.50
@@ -70,7 +70,7 @@ PUB9_node2 ansible_host=10.5.11.91
 PUB9_node2 ansible_host=10.5.11.92
 
 [pub3]
-PUB3_node1 ansible_host=10.5.11.100
+PUB3_node1 ansible_host=10.5.11.15
 
 [publab_infra]
 syslog_publab ansible_host=10.5.11.222

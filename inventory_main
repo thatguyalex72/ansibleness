@@ -6,8 +6,8 @@ twingate_demolab3 ansible_host=10.8.12.91
 twingate_demolab4 ansible_host=10.8.12.89
 
 [twingate_publab]
-twingate_publab1 ansible_host=10.5.11.48
-twingate_publab2 ansible_host=10.5.11.47
+twingate_publab1 ansible_host=10.5.11.28
+twingate_publab2 ansible_host=10.5.11.29
 
 [logging_demolab]
 syslog_demolab ansible_host=10.8.12.200
@@ -19,7 +19,6 @@ wazuh_publab ansible_host=10.5.11.89
 
 [misc_demolab]
 zabby_demolab ansible_host=10.8.12.50
-authentik_demo ansible_host=10.8.12.49
 docker_demolab ansible_host=10.8.12.31
 docker2_demolab ansible_host=10.8.12.231
 dvwa ansible_host=10.8.12.51
@@ -67,7 +66,6 @@ logging_demolab
 misc_demolab
 
 [publab]
-outkvm ansible_host=10.5.11.41
 
 [publab:children]
 twingate_publab

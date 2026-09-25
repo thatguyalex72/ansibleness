@@ -146,7 +146,7 @@
   gather_facts: false
   tags: [never, cleanup]
   environment:
-    SC_HOST: "https://10.5.11.80"
+    SC_HOST: "https://10.5.11.11"
     SC_USERNAME: "{{ sc_username }}"
     SC_PASSWORD: "{{ sc_password }}"
   tasks:
@@ -199,7 +199,7 @@
   gather_facts: false
   tags: [never, cleanup]
   environment:
-    SC_HOST: "https://10.5.11.110"
+    SC_HOST: "https://10.5.11.14"
     SC_USERNAME: "{{ sc_username }}"
     SC_PASSWORD: "{{ sc_password }}"
   tasks:
@@ -252,7 +252,7 @@
   gather_facts: false
   tags: [never, cleanup]
   environment:
-    SC_HOST: "https://10.5.11.100"
+    SC_HOST: "https://10.5.11.15"
     SC_USERNAME: "{{ sc_username }}"
     SC_PASSWORD: "{{ sc_password }}"
   tasks:

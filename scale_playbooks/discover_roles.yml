@@ -7,13 +7,13 @@
 #   Single cluster:   ansible-playbook discover_roles.yml --tags pub1
 
 # =============================================================================
-- name: Discover Roles - PUB1 (10.5.11.80)
+- name: Discover Roles - PUB1 (10.5.11.11)
   hosts: PUB1_node1
   connection: local
   gather_facts: false
   tags: [pub1]
   environment:
-    SC_HOST: "https://10.5.11.80"
+    SC_HOST: "https://10.5.11.11"
     SC_USERNAME: "{{ sc_username }}"
     SC_PASSWORD: "{{ sc_password }}"
   tasks:
@@ -31,13 +31,13 @@
         label: "{{ item.name }}"
 
 # =============================================================================
-- name: Discover Roles - PUB2 (10.5.11.110)
+- name: Discover Roles - PUB2 (10.5.11.14)
   hosts: PUB2_node1
   connection: local
   gather_facts: false
   tags: [pub2]
   environment:
-    SC_HOST: "https://10.5.11.110"
+    SC_HOST: "https://10.5.11.14"
     SC_USERNAME: "{{ sc_username }}"
     SC_PASSWORD: "{{ sc_password }}"
   tasks:
@@ -55,13 +55,13 @@
         label: "{{ item.name }}"
 
 # =============================================================================
-- name: Discover Roles - PUB3 (10.5.11.100)
+- name: Discover Roles - PUB3 (10.5.11.15)
   hosts: PUB3_node1
   connection: local
   gather_facts: false
   tags: [pub3]
   environment:
-    SC_HOST: "https://10.5.11.100"
+    SC_HOST: "https://10.5.11.15"
     SC_USERNAME: "{{ sc_username }}"
     SC_PASSWORD: "{{ sc_password }}"
   tasks:

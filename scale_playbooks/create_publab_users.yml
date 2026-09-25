@@ -126,13 +126,13 @@
       when: users | length > 0
 
 # =============================================================================
-- name: Create Users - PUB1 (10.5.11.80)
+- name: Create Users - PUB1 (10.5.11.11)
   hosts: PUB1_node1
   connection: local
   gather_facts: false
   tags: [pub1, nomail]
   environment:
-    SC_HOST: "https://10.5.11.80"
+    SC_HOST: "https://10.5.11.11"
     SC_USERNAME: "{{ sc_username }}"
     SC_PASSWORD: "{{ sc_password }}"
   tasks:
@@ -166,13 +166,13 @@
       when: users | length > 0
 
 # =============================================================================
-- name: Create Users - PUB2 (10.5.11.110)
+- name: Create Users - PUB2 (10.5.11.14)
   hosts: PUB2_node1
   connection: local
   gather_facts: false
   tags: [pub2, nomail]
   environment:
-    SC_HOST: "https://10.5.11.110"
+    SC_HOST: "https://10.5.11.14"
     SC_USERNAME: "{{ sc_username }}"
     SC_PASSWORD: "{{ sc_password }}"
   tasks:
@@ -207,13 +207,13 @@
       when: users | length > 0
 
 # =============================================================================
-- name: Create Users - PUB3 (10.5.11.100)
+- name: Create Users - PUB3 (10.5.11.15)
   hosts: PUB3_node1
   connection: local
   gather_facts: false
   tags: [pub3, nomail]
   environment:
-    SC_HOST: "https://10.5.11.100"
+    SC_HOST: "https://10.5.11.15"
     SC_USERNAME: "{{ sc_username }}"
     SC_PASSWORD: "{{ sc_password }}"
   tasks:

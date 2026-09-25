@@ -59,9 +59,9 @@ SC_PASSWORD          = os.environ.get("SC_PASSWORD", "")
 
 # Publab clusters to check for existing users
 PUBLAB_CLUSTERS = [
-    "https://10.5.11.80",
-    "https://10.5.11.110",
-    "https://10.5.11.100",
+    "https://10.5.11.11",
+    "https://10.5.11.14",
+    "https://10.5.11.15",
 ]
 
 # Update these to match the exact column headers in your Google Sheet
