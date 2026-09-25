@@ -11,6 +11,12 @@ twingate_publab2 ansible_host=10.5.11.29
 
 [twingate_oob]
 twingate_oob1 ansible_host=10.5.1.230
+twingate_oob2 ansible_host=10.5.1.218
+
+# Twingate connectors in the Indy office - 10.100.5.0/24, not a lab subnet.
+[twingate_indy]
+twingate_demolab9 ansible_host=10.100.5.183
+twingate_demolab10 ansible_host=10.100.5.142
 
 [logging_demolab]
 syslog_demolab ansible_host=10.8.12.200
@@ -55,6 +61,7 @@ FIO5 ansible_host=10.8.12.244 static_ip=10.8.12.244
 twingate_demolab
 twingate_publab
 twingate_oob
+twingate_indy
 
 [syslog:children]
 logging_demolab
