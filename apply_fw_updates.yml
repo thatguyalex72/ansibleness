@@ -1,0 +1,117 @@
+---
+# DESCRIPTION
+# Apply firmware updates via fwupd / LVFS (Linux Vendor Firmware Service).
+#
+# Firmware is a separate update channel from apt. `apt upgrade` never touches
+# it, which is why the login banner line
+#   "1 device has a firmware upgrade available."
+# survives a full patch run - it is printed by /etc/update-motd.d/85-fwupd,
+# not by the apt MOTD script that apply_apt_updates.yml reads.
+#
+# On a VM with no passthrough hardware the pending device is usually the UEFI
+# dbx - the Secure Boot revocation list - rather than real firmware.
+#
+# ORDER MATTERS: apply apt updates BEFORE firmware, so shim and grub are
+# current before any dbx revocation lands. Applying a revocation list while
+# still booting a superseded bootloader is how a host is made unbootable.
+# Current fwupd refuses a dbx update it detects would block the running
+# bootloader, but do not rely on that as the only guard.
+
+# Process!!
+# Refresh LVFS metadata first (requires sudo): ansible-playbook apply_fw_updates.yml --tags refresh -K
+# Report what is pending, read-only: ansible-playbook apply_fw_updates.yml --tags check
+# List every device fwupd can see, read-only: ansible-playbook apply_fw_updates.yml --tags devices
+# Apply pending firmware (requires sudo): ansible-playbook apply_fw_updates.yml --tags upgrade -K
+# Reboot so staged UEFI capsules take effect (requires sudo): ansible-playbook apply_fw_updates.yml --tags reboot -K
+# To limit the playbook to any hosts or group use -l, e.g. -l 'all:!shoresy'
+# To point it at a different group: -e target=fio_load
+
+
+- name: Apply Firmware Updates
+  # Defaults to [linux] rather than [apt] - fwupd is not apt-specific, so the
+  # dnf/yum hosts belong here too once they are in the inventory.
+  hosts: "{{ target | default('linux') }}"
+  gather_facts: no
+
+  tasks:
+
+  - block:
+    # Pulls the current metadata from LVFS. Without this, get-upgrades reports
+    # against a stale local cache. Exits 2 when the metadata is already fresh,
+    # which is not a failure.
+    - name: Refresh LVFS Metadata
+      shell: |
+        command -v fwupdmgr >/dev/null 2>&1 || { echo "fwupdmgr not installed"; exit 0; }
+        fwupdmgr refresh 2>&1
+        rc=$?
+        [ $rc -eq 2 ] && exit 0
+        exit $rc
+      become: yes
+      register: fw_refresh
+      tags:
+      - refresh
+
+    - name: Show Refresh Result
+      debug: msg="{{ fw_refresh.stdout_lines }}"
+      tags:
+      - refresh
+
+    # Read-only. rc is deliberately ignored: get-upgrades exits 2 when there is
+    # nothing pending, and non-zero again where fwupd is not installed at all.
+    # Neither is a failure, and a reporting run should never fail a host.
+    # 2>&1 keeps the reason in stdout where the Show task prints it.
+    - name: Gather Firmware Updates
+      shell: fwupdmgr get-upgrades --no-unreported-check --no-metadata-check 2>&1 || true
+      register: fw_upgrades
+      changed_when: false
+      tags:
+      - check
+
+    # stdout_lines, not stdout - fwupd prints an indented device tree that is
+    # unreadable as a single escaped string.
+    - name: Show Firmware Updates
+      debug: msg="{{ fw_upgrades.stdout_lines }}"
+      tags:
+      - check
+
+    - name: Gather Firmware Devices
+      shell: fwupdmgr get-devices --no-unreported-check 2>&1 || true
+      register: fw_devices
+      changed_when: false
+      tags:
+      - devices
+
+    - name: Show Firmware Devices
+      debug: msg="{{ fw_devices.stdout_lines }}"
+      tags:
+      - devices
+
+    # Unlike the read-only tasks above, this one surfaces real failures: rc 2
+    # (nothing to do) and a missing fwupdmgr exit clean, anything else fails
+    # the host. A firmware write that errors is not something to swallow.
+    - name: Apply Firmware Updates
+      shell: |
+        command -v fwupdmgr >/dev/null 2>&1 || { echo "fwupdmgr not installed"; exit 0; }
+        fwupdmgr update --assume-yes --no-unreported-check --no-metadata-check 2>&1
+        rc=$?
+        [ $rc -eq 2 ] && exit 0
+        exit $rc
+      become: yes
+      register: fw_apply
+      tags:
+      - upgrade
+
+    - name: Show Apply Result
+      debug: msg="{{ fw_apply.stdout_lines }}"
+      tags:
+      - upgrade
+
+    # Unconditional, unlike the apt playbook's reboot task. UEFI capsules are
+    # only staged by the upgrade tag - the firmware applies them at next boot -
+    # and fwupd leaves no /var/run/reboot-required marker to test, so this is an
+    # explicit opt-in rather than a conditional.
+    - name: Reboot to Complete Firmware Update
+      reboot:
+      become: yes
+      tags:
+      - reboot
