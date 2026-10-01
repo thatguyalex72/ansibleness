@@ -63,6 +63,35 @@ twingate_publab
 twingate_oob
 twingate_indy
 
+# === Twingate failure groups ===
+# Connectors are deployed as redundant pairs on a shared cluster: (1,2) on one,
+# (3,4) on the next, and so on. Dropping both members of a pair at once takes
+# that cluster's connectivity down with it - and the connectors are the path
+# into the lab, so that is self-inflicted.
+#
+# set_a holds one member of every pair, set_b the other. Patch, upgrade or
+# reboot set_a, confirm it is back, then do set_b:
+#   ansible-playbook apply_apt_updates.yml --tags upgrade -K -l twingate_set_a
+#   ansible-playbook apply_apt_updates.yml --tags upgrade -K -l twingate_set_b
+#
+# These are selector groups - they deliberately re-list hosts defined above
+# rather than owning them, so they are NOT wired into [apt:children]. The hosts
+# already reach [apt] through [twingate]; adding these there would double them.
+
+[twingate_set_a]
+twingate_demolab1
+twingate_demolab3
+twingate_publab1
+twingate_oob1
+twingate_demolab9
+
+[twingate_set_b]
+twingate_demolab2
+twingate_demolab4
+twingate_publab2
+twingate_oob2
+twingate_demolab10
+
 [syslog:children]
 logging_demolab
 

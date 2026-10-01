@@ -1,0 +1,197 @@
+---
+# DESCRIPTION
+# Ubuntu release upgrade (do-release-upgrade), e.g. 22.04 -> 24.04.
+# Replaces do-release-upgrade.yml, which ran unguarded against hosts: linux.
+#
+# --tags check is read-only and runs fleet-wide with no arguments.
+# --tags upgrade and --tags reboot refuse to start unless you name the hosts,
+# with -l or -e target=, and then move one host at a time. That asymmetry is
+# deliberate - a forgotten -l on a check costs nothing, but on an upgrade it
+# would start a simultaneous OS upgrade across the fleet, connectors included.
+
+# Process!!
+# Report what would upgrade, read-only, no sudo, whole [apt] group: ansible-playbook apply_release_upgrade.yml --tags check
+# ...or narrow it the usual way: ansible-playbook apply_release_upgrade.yml --tags check -l <host|group>
+# Perform the release upgrade (requires sudo): ansible-playbook apply_release_upgrade.yml --tags upgrade -K -l <host|group>
+# Reboot to finish it (requires sudo): ansible-playbook apply_release_upgrade.yml --tags reboot -K -l <host|group>
+#
+# One host at a time by default. Override to run a whole set at once:
+#   -e batch=5        (integer, or a percentage like -e batch=50%)
+#
+# TWINGATE CONNECTORS - never upgrade a redundant pair together. Use the
+# failure groups in inventory_main and confirm set_a is healthy before set_b:
+#   ansible-playbook apply_release_upgrade.yml --tags upgrade,reboot -K -l twingate_set_a
+#   ansible-playbook twingate_version.yml -l twingate_set_a        # confirm
+#   ansible-playbook apply_release_upgrade.yml --tags upgrade,reboot -K -l twingate_set_b
+#
+# BEFORE YOU RUN THIS:
+#   1. apply_apt_updates.yml --tags upgrade -K   - do-release-upgrade needs a
+#      consistent dpkg state (no broken or half-configured packages). Pending
+#      PHASED updates are not a blocker - they are held back by design and are
+#      superseded by the new release. To clear them anyway:
+#        sudo apt-get -o APT::Get::Always-Include-Phased-Updates=true dist-upgrade
+#   2. fix_apt_repos.yml                          - third-party repos are
+#      disabled during the upgrade and broken ones will stall it.
+#   3. Snapshot the VM. There is no revert path in this playbook.
+
+
+- name: Apply Ubuntu Release Upgrade
+  # Gated by the "Refuse to run" assert below rather than by a narrow default.
+  # A default of 'none' would be safe but unusable: -l only NARROWS an existing
+  # pattern, so -l <group> against 'none' still matches nothing. 'apt' is the
+  # widest this should ever reach - the assert is what stops a fleet-wide run.
+  hosts: "{{ target | default('apt') }}"
+  # One host at a time for anything destructive, so a failed upgrade stops the
+  # run instead of taking the rest of the group with it. A read-only --tags
+  # check has no such risk and runs the whole group at once - with serial 1 it
+  # would crawl, and a single bad host would stall the report.
+  # Override either way with -e batch=N.
+  serial: "{{ batch | default(1 if ('upgrade' in ansible_run_tags or 'reboot' in ansible_run_tags) else 100) }}"
+  gather_facts: yes
+
+  tasks:
+
+  - block:
+    # ── guard ─────────────────────────────────────────────────────────────────
+
+    # Tagged upgrade/reboot, NOT always: --tags check is read-only and runs
+    # fleet-wide without ceremony. Only the destructive paths demand an
+    # explicit target. A run with no --tags at all includes these tags, so the
+    # most dangerous invocation is still guarded.
+    # run_once: a failure here fails the play for every host, before any task
+    # has touched anything.
+    - name: Refuse to Upgrade Without an Explicit Target
+      assert:
+        that:
+        - (ansible_limit is defined) or (target is defined)
+        fail_msg: >-
+          Refusing to upgrade the whole fleet at once. Name the hosts, e.g.
+          -l twingate_set_a   or   -e target=twingate_set_a
+        success_msg: "targeting: {{ ansible_limit | default(target | default('(unset)')) }}"
+      run_once: true
+      tags:
+      - upgrade
+      - reboot
+
+    # ── check: read-only, no sudo ─────────────────────────────────────────────
+
+    - name: Gather Current Release
+      debug:
+        msg: "{{ ansible_distribution }} {{ ansible_distribution_version }} ({{ ansible_distribution_release }})"
+      tags:
+      - check
+
+    # Decides WHICH release each host targets - 'lts' goes LTS to LTS, 'normal'
+    # steps to interim releases, 'never' means do-release-upgrade will find
+    # nothing. Fleet-wide this is the setting that most often explains why a
+    # host did not move.
+    - name: Gather Release Upgrade Policy
+      shell: grep -E '^Prompt=' /etc/update-manager/release-upgrades 2>&1 || echo "Prompt= not set"
+      register: rel_policy
+      changed_when: false
+      tags:
+      - check
+      when: ansible_distribution == "Ubuntu"
+
+    - name: Show Release Upgrade Policy
+      debug: msg="{{ rel_policy.stdout }}"
+      tags:
+      - check
+      when: ansible_distribution == "Ubuntu"
+
+    # -c checks only and changes nothing. It exits non-zero when no new release
+    # is available, which is a normal answer rather than a failure, so rc is
+    # ignored and 2>&1 keeps the reason in stdout.
+    - name: Gather Available Release Upgrade
+      shell: do-release-upgrade -c 2>&1 || true
+      register: rel_check
+      changed_when: false
+      tags:
+      - check
+      when: ansible_distribution == "Ubuntu"
+
+    - name: Show Available Release Upgrade
+      debug: msg="{{ rel_check.stdout_lines }}"
+      tags:
+      - check
+      when: ansible_distribution == "Ubuntu"
+
+    # `apt list --upgradable` overcounts: it includes phased updates, which the
+    # resolver deliberately holds back until the host falls inside the rollout
+    # percentage. Those can never be applied by a plain dist-upgrade, so
+    # reporting them as "pending" demands something unachievable.
+    #
+    # A dist-upgrade simulation answers the real question - what apt would
+    # actually install right now. Parsed from apt's own summary line
+    # ("N upgraded, ... and M not upgraded") rather than counted from the
+    # package list: kept-back packages print space-separated on wrapped lines,
+    # so counting lines undercounts them. held_back is phased or pinned and is
+    # NOT a blocker - the release upgrade moves to a new archive where those
+    # versions are superseded. -s needs no root.
+    - name: Gather Applicable APT Updates
+      shell: |
+        sum=$(apt-get -s dist-upgrade 2>/dev/null | grep -E '^[0-9]+ upgraded' | tail -1)
+        applicable=$(echo "$sum" | awk '{print $1}')
+        held=$(echo "$sum" | grep -oE '[0-9]+ not upgraded' | awk '{print $1}')
+        echo "applicable=${applicable:-0} held_back=${held:-0}"
+      register: rel_pending
+      changed_when: false
+      tags:
+      - check
+      when: ansible_distribution == "Ubuntu"
+
+    - name: Show Applicable APT Updates
+      debug:
+        msg: >-
+          {{ rel_pending.stdout | trim }}
+          -- apply 'applicable' before upgrading; 'held_back' are phased and do not block
+      tags:
+      - check
+      when: ansible_distribution == "Ubuntu"
+
+    # ── upgrade ───────────────────────────────────────────────────────────────
+
+    # Runs 20-60 minutes. async/poll detaches it so an SSH drop mid-upgrade does
+    # not lose the handle - the same pattern netplan_static.yml uses for network
+    # changes. async is 3600s (1h); raise it for slow storage.
+    - name: Do Release Upgrade
+      shell: do-release-upgrade -f DistUpgradeViewNonInteractive
+      become: yes
+      register: rel_upgrade
+      async: 3600
+      poll: 30
+      tags:
+      - upgrade
+      when: ansible_distribution == "Ubuntu"
+
+    - name: Show Release Upgrade Result
+      debug: msg="{{ rel_upgrade.stdout_lines | default(['(no output)']) }}"
+      tags:
+      - upgrade
+      when: ansible_distribution == "Ubuntu"
+
+    # ── reboot ────────────────────────────────────────────────────────────────
+
+    # Unconditional: a release upgrade always needs one, and the apt marker file
+    # is not a reliable signal after do-release-upgrade. The reboot module waits
+    # for the host to answer again before the play moves on, which with serial
+    # means the next host is not touched until this one is back.
+    - name: Reboot to Complete Release Upgrade
+      reboot:
+        reboot_timeout: 900
+      become: yes
+      tags:
+      - reboot
+
+    - name: Confirm Release After Reboot
+      setup:
+        filter: ansible_distribution*
+      register: post_facts
+      tags:
+      - reboot
+
+    - name: Show Release After Reboot
+      debug:
+        msg: "now {{ post_facts.ansible_facts.ansible_distribution }} {{ post_facts.ansible_facts.ansible_distribution_version }}"
+      tags:
+      - reboot
