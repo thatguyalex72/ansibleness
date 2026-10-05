@@ -26,7 +26,7 @@
         target_vms: >-
           {{ all_vms.records
              | map(attribute='vm_name')
-             | select('match', '(?i)^(DC02|DC03|USP-S-FINANCE-clone)$')
+             | select('match', '(?i)^(DC02|DC03|US-S-FINANCE-clone)$')
              | list }}
 
     - name: Power off demo VMs
