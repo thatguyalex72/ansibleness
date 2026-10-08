@@ -27,6 +27,9 @@ zabby_demolab ansible_host=10.8.12.50
 docker_demolab ansible_host=10.8.12.31
 docker2_demolab ansible_host=10.8.12.231
 dvwa ansible_host=10.8.12.51
+claude_console ansible_host=10.8.12.253
+authentik ansible_host=10.8.12.32
+kuma ansible_host=10.8.12.110
 
 #[virtnet]
 #twingate_publab3 ansible_host=10.5.80.128
