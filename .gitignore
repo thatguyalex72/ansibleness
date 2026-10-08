@@ -4,3 +4,4 @@
 __pycache__/
 *.pyc
 create_linux_user.yml
+files/
