@@ -22,7 +22,7 @@
 #
 # KEY VARS (override with -e):
 #   vmname=demo-docker      VM name — must be unique per cluster
-#   vm_password=Scale2025!  ubuntu user password for SSH / console
+#   vm_password=<password>  ubuntu user password for SSH / console
 #   nginx_initial_tag=1.25  nginx version cloud-init will deploy
 #   nginx_new_tag=1.27      nginx version Ansible will update to
 #
