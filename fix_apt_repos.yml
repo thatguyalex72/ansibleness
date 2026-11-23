@@ -5,13 +5,27 @@
 #   twingate  - import the real signing key and switch to signed-by. The repo
 #               was configured [trusted=yes], which disables signature checking
 #               entirely - that is why NO_PUBKEY was only a warning. Applies to
-#               every Twingate host.
+#               every Twingate host. Written as deb822 twingate.sources so
+#               do-release-upgrade can carry it forward; all twingate.list*
+#               files (active, .distUpgrade, .disabled, ~ backups) are removed.
 #   salt      - repo.saltproject.io is dead upstream (dangling CNAME; the
 #               CloudFront distribution was deleted). Repoint at Broadcom's
 #               Artifactory, which took over Salt distribution.
 #   puppet    - vestigial: puppet8-release is installed but puppet-agent is not,
 #               the signing key has expired, and it is a focal repo on a jammy
 #               host. Remove it.
+#   zabbix    - (zabby_demolab) 26.04 upgrade left zabbix.sources as a disabled
+#               7.2/noble entry; the correct 8.0/resolute file sat unused as
+#               zabbix.sources.dpkg-dist. Install it, clean up leftovers, and
+#               HOLD the Zabbix packages (they are on 8.0.0~rc3; rc -> GA
+#               upgrades the DB schema - back up first, upgrade deliberately).
+#   wazuh     - (wazuh_demolab) wazuh.list was renamed .disabled by the 26.04
+#               upgrade. Rewrite as deb822 wazuh.sources and HOLD indexer/
+#               manager/dashboard so they are only upgraded together, on
+#               purpose, per the Wazuh upgrade guide.
+#
+#   To upgrade a held package later:
+#     sudo apt-mark unhold <pkgs>; sudo apt install --only-upgrade <pkgs>; sudo apt-mark hold <pkgs>
 #
 # Salt and Puppet only exist on twingate_demolab1 (restored from a Nov-2023
 # snapshot during the migration). Twingate applies fleet-wide.
@@ -19,9 +33,10 @@
 # Usage:
 #   ansible-playbook fix_apt_repos.yml --ask-become-pass
 #   ansible-playbook fix_apt_repos.yml --ask-become-pass --tags twingate
+#   ansible-playbook fix_apt_repos.yml --ask-become-pass --tags zabbix,wazuh,verify -l zabby_demolab,wazuh_demolab
 #   ansible-playbook fix_apt_repos.yml --ask-become-pass --check    # dry run
 #
-# Existing .list files are backed up before being replaced.
+# Salt/Puppet .list files are backed up before being replaced.
 
 
 - name: Fix Twingate repo signing across all Twingate hosts
@@ -48,14 +63,40 @@
     tags:
     - twingate
 
-  - name: Point Twingate repo at the key instead of trusting it blindly
+  # deb822 format (.sources), not a one-line .list. do-release-upgrade could
+  # not migrate twingate.list during the 26.04 upgrades and disabled it, which
+  # left most connectors stuck on 1.93 with apt reporting "0 updates".
+  - name: Write Twingate repo as a deb822 .sources file
     copy:
-      dest: /etc/apt/sources.list.d/twingate.list
+      dest: /etc/apt/sources.list.d/twingate.sources
       mode: '0644'
-      backup: yes
       content: |
-        deb [signed-by=/etc/apt/keyrings/twingate.asc] https://packages.twingate.com/apt/ /
+        Types: deb
+        URIs: https://packages.twingate.com/apt/
+        Suites: /
+        Signed-By: /etc/apt/keyrings/twingate.asc
     register: tg_repo
+    tags:
+    - twingate
+
+  # Covers the active twingate.list (would duplicate the .sources entry) and
+  # the dead leftovers from the release upgrade: .distUpgrade, .disabled and
+  # the timestamped ~ backups.
+  - name: Find old Twingate .list files
+    find:
+      paths: /etc/apt/sources.list.d
+      patterns: 'twingate.list*'
+    register: tg_old_lists
+    tags:
+    - twingate
+
+  - name: Remove old Twingate .list files
+    file:
+      path: "{{ item.path }}"
+      state: absent
+    loop: "{{ tg_old_lists.files }}"
+    loop_control:
+      label: "{{ item.path }}"
     tags:
     - twingate
 
@@ -150,6 +191,184 @@
     - salt
 
 
+- name: Fix Zabbix repo after the 26.04 release upgrade
+  hosts: "{{ zabbix_target | default('zabby_demolab') }}"
+  become: yes
+
+  tasks:
+
+  # Server/frontend/agent are on 8.0.0~rc3 from the (now disabled) unstable
+  # repo. rc -> GA runs a DB schema upgrade when zabbix-server starts, so hold
+  # everything except zabbix-release; routine apply_apt_updates runs then skip
+  # Zabbix until it is upgraded deliberately after a DB backup.
+  - name: List installed Zabbix packages
+    shell: dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' 'zabbix*' | awk '$1=="ii" && $2!="zabbix-release" {print $2}'
+    register: zbx_pkgs
+    changed_when: false
+    check_mode: false
+    tags:
+    - zabbix
+
+  - name: Hold Zabbix packages
+    dpkg_selections:
+      name: "{{ item }}"
+      selection: hold
+    loop: "{{ zbx_pkgs.stdout_lines }}"
+    tags:
+    - zabbix
+
+  # zabbix-release 8.0 shipped the correct 8.0/resolute zabbix.sources, but
+  # dpkg parked it as .dpkg-dist because the old (edited, disabled 7.2/noble)
+  # file was in the way. zabbix-release.sources and zabbix-tools.sources were
+  # replaced cleanly and are already correct.
+  - name: Check for the packaged zabbix.sources
+    stat:
+      path: /etc/apt/sources.list.d/zabbix.sources.dpkg-dist
+    register: zbx_dist
+    tags:
+    - zabbix
+
+  - name: Install the packaged zabbix.sources (8.0 stable, resolute)
+    copy:
+      src: /etc/apt/sources.list.d/zabbix.sources.dpkg-dist
+      dest: /etc/apt/sources.list.d/zabbix.sources
+      remote_src: yes
+      mode: '0644'
+    when: zbx_dist.stat.exists
+    tags:
+    - zabbix
+
+  # zabbix-unstable.sources is left alone: it belongs to zabbix-release and
+  # already says Enabled: no.
+  - name: Find Zabbix upgrade leftovers
+    find:
+      paths: /etc/apt/sources.list.d
+      patterns:
+      - 'zabbix*.list.disabled'
+      - 'zabbix*.dpkg-bak'
+      - 'zabbix*.dpkg-old'
+      - 'zabbix.sources.dpkg-dist'
+    register: zbx_leftovers
+    tags:
+    - zabbix
+
+  - name: Remove Zabbix upgrade leftovers
+    file:
+      path: "{{ item.path }}"
+      state: absent
+    loop: "{{ zbx_leftovers.files }}"
+    loop_control:
+      label: "{{ item.path }}"
+    tags:
+    - zabbix
+
+  - name: Update apt cache
+    apt:
+      update_cache: yes
+    register: zbx_apt
+    failed_when: false
+    tags:
+    - verify
+
+  - name: Check Zabbix candidate versions
+    shell: apt-cache policy zabbix-server-mysql zabbix-agent | grep -E '^\S|Installed|Candidate'; echo "held:"; apt-mark showhold | grep zabbix
+    register: zbx_policy
+    changed_when: false
+    check_mode: false
+    failed_when: false
+    tags:
+    - verify
+
+  - name: Show Zabbix status
+    debug:
+      msg: "{{ ['apt update OK' if not zbx_apt.failed else 'STILL FAILING: ' + (zbx_apt.msg | default(''))] + zbx_policy.stdout_lines }}"
+    tags:
+    - verify
+
+
+- name: Fix Wazuh repo after the 26.04 release upgrade
+  hosts: "{{ wazuh_target | default('wazuh_demolab') }}"
+  become: yes
+
+  tasks:
+
+  # Wazuh's indexer, manager and dashboard must be upgraded together, in
+  # order, following the Wazuh upgrade guide - never piecemeal by a routine
+  # apt upgrade. Hold whichever of them are installed.
+  - name: List installed Wazuh central components
+    shell: dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' wazuh-indexer wazuh-manager wazuh-dashboard 2>/dev/null | awk '$1=="ii" {print $2}'
+    register: wz_pkgs
+    changed_when: false
+    failed_when: false
+    check_mode: false
+    tags:
+    - wazuh
+
+  - name: Hold Wazuh central components
+    dpkg_selections:
+      name: "{{ item }}"
+      selection: hold
+    loop: "{{ wz_pkgs.stdout_lines }}"
+    tags:
+    - wazuh
+
+  # deb822 so the next do-release-upgrade can carry it forward instead of
+  # renaming it to .disabled again. Key is already at /usr/share/keyrings.
+  - name: Write Wazuh repo as a deb822 .sources file
+    copy:
+      dest: /etc/apt/sources.list.d/wazuh.sources
+      mode: '0644'
+      content: |
+        Types: deb
+        URIs: https://packages.wazuh.com/4.x/apt/
+        Suites: stable
+        Components: main
+        Signed-By: /usr/share/keyrings/wazuh.gpg
+    tags:
+    - wazuh
+
+  - name: Find old Wazuh .list files
+    find:
+      paths: /etc/apt/sources.list.d
+      patterns: 'wazuh.list*'
+    register: wz_old_lists
+    tags:
+    - wazuh
+
+  - name: Remove old Wazuh .list files
+    file:
+      path: "{{ item.path }}"
+      state: absent
+    loop: "{{ wz_old_lists.files }}"
+    loop_control:
+      label: "{{ item.path }}"
+    tags:
+    - wazuh
+
+  - name: Update apt cache
+    apt:
+      update_cache: yes
+    register: wz_apt
+    failed_when: false
+    tags:
+    - verify
+
+  - name: Check Wazuh candidate versions
+    shell: apt-cache policy wazuh-indexer wazuh-manager wazuh-dashboard | grep -E '^\S|Installed|Candidate'; echo "held:"; apt-mark showhold | grep wazuh
+    register: wz_policy
+    changed_when: false
+    check_mode: false
+    failed_when: false
+    tags:
+    - verify
+
+  - name: Show Wazuh status
+    debug:
+      msg: "{{ ['apt update OK' if not wz_apt.failed else 'STILL FAILING: ' + (wz_apt.msg | default(''))] + wz_policy.stdout_lines }}"
+    tags:
+    - verify
+
+
 - name: Verify apt is clean
   hosts: "{{ twingate_target | default('twingate') }}"
   become: yes
@@ -167,5 +386,21 @@
   - name: Report
     debug:
       msg: "{{ 'apt update OK' if not apt_result.failed else 'STILL FAILING: ' + (apt_result.msg | default('')) }}"
+    tags:
+    - verify
+
+  # Installed == Candidate with only the dpkg status line means the repo is
+  # still not being seen.
+  - name: Check twingate-connector candidate version
+    shell: apt-cache policy twingate-connector | sed -n '2,3p'
+    register: tg_policy
+    changed_when: false
+    check_mode: false
+    tags:
+    - verify
+
+  - name: Show twingate-connector versions
+    debug:
+      msg: "{{ tg_policy.stdout_lines }}"
     tags:
     - verify
